@@ -1,1 +1,1 @@
-# TEKN-KEL
+# Teknikel
