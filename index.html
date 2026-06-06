@@ -133,7 +133,21 @@ function search(q) {
     nameEl.textContent = found.name || '—';
     priceEl.textContent = found.price != null ? Number(found.price).toFixed(2) + ' ₺' : '—';
     statusEl.textContent = '✓ Bulundu'; statusEl.className = 'td-found';
-    dateEl.textContent = found.updated ? new Date(found.updated).toLocaleDateString('tr-TR') : '—';
+    if (found.updated) {
+      try {
+        var d = found.updated;
+        if (typeof d === 'string' && d.includes('Date')) {
+          var ms = parseInt(d.replace(/[^0-9]/g, ''));
+          dateEl.textContent = new Date(ms).toLocaleDateString('tr-TR');
+        } else if (typeof d === 'number') {
+          var excelDate = new Date((d - 25569) * 86400 * 1000);
+          dateEl.textContent = excelDate.toLocaleDateString('tr-TR');
+        } else {
+          var parsed = new Date(d);
+          dateEl.textContent = isNaN(parsed) ? String(d) : parsed.toLocaleDateString('tr-TR');
+        }
+      } catch(e) { dateEl.textContent = String(found.updated); }
+    } else { dateEl.textContent = '—'; }
   } else {
     nameEl.textContent = 'Bulunamadı'; priceEl.textContent = '—';
     statusEl.textContent = '✗ Bulunamadı'; statusEl.className = 'td-notfound';
