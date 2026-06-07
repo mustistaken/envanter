@@ -258,7 +258,7 @@ function renderBasket() {
   el.innerHTML = `<table class="basket-table">
     <thead><tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot>${kdvAktif ? `<tr style="background:#E2EFDA"><td colspan="3" style="text-align:right;padding-right:10px;font-size:12px">KDV Hariç</td><td colspan="2">${total.toFixed(2)} ₺</td></tr>` : ''}<tr class="total-row"><td colspan="3" style="text-align:right;padding-right:10px">GENEL TOPLAM</td><td colspan="2">${(kdvAktif ? total * 1.20 : total).toFixed(2)} ₺</td></tr></tfoot>
+    <tfoot>${kdvAktif ? `<tr style="background:#E2EFDA"><td colspan="3" style="text-align:right;padding-right:10px;font-size:12px;color:#333">KDV Hariç</td><td colspan="2" style="color:#333">${total.toFixed(2)} ₺</td></tr>` : ''}<tr class="total-row"><td colspan="3" style="text-align:right;padding-right:10px;color:#fff">GENEL TOPLAM</td><td colspan="2" style="color:#fff;font-size:17px">${(kdvAktif ? total * 1.20 : total).toFixed(2)} ₺</td></tr></tfoot>
   </table>`;
 }
 
