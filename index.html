@@ -121,7 +121,10 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
         <div class="empty-basket">Sepet boş<br><span style="font-size:11px">Sorgulama sayfasından ürün ekleyin</span></div>
       </div>
     </div>
-    <button class="clear-btn" onclick="clearBasket()">🗑️ Sepeti Temizle</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="clear-btn" style="flex:1" onclick="toggleKdv()" id="kdvBtn">+KDV (%20)</button>
+    <button class="clear-btn" style="flex:1" onclick="clearBasket()">🗑️ Temizle</button>
+  </div>
   </div>
 </div>
 
@@ -215,6 +218,15 @@ function removeFromBasket(barcode) {
   updateBadge();
 }
 
+let kdvAktif = false;
+function toggleKdv() {
+  kdvAktif = !kdvAktif;
+  const btn = document.getElementById('kdvBtn');
+  btn.style.background = kdvAktif ? '#1a7a4a' : '#c0392b';
+  btn.textContent = kdvAktif ? '✓ KDV Dahil (%20)' : '+KDV (%20)';
+  renderBasket();
+}
+
 function clearBasket() {
   if (basket.length === 0) return;
   if (confirm('Sepeti temizlemek istiyor musunuz?')) {
@@ -246,7 +258,7 @@ function renderBasket() {
   el.innerHTML = `<table class="basket-table">
     <thead><tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr class="total-row"><td colspan="3" style="text-align:right;padding-right:10px">GENEL TOPLAM</td><td colspan="2">${total.toFixed(2)} ₺</td></tr></tfoot>
+    <tfoot>${kdvAktif ? `<tr style="background:#E2EFDA"><td colspan="3" style="text-align:right;padding-right:10px;font-size:12px">KDV Hariç</td><td colspan="2">${total.toFixed(2)} ₺</td></tr>` : ''}<tr class="total-row"><td colspan="3" style="text-align:right;padding-right:10px">GENEL TOPLAM</td><td colspan="2">${(kdvAktif ? total * 1.20 : total).toFixed(2)} ₺</td></tr></tfoot>
   </table>`;
 }
 
