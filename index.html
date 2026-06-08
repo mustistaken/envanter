@@ -58,6 +58,8 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
 .basket-tbl .item-row td { padding: 10px 6px; text-align: center; border-bottom: 1px solid #eee; color: #222; background: #fff; }
 .basket-tbl .item-row:nth-child(even) td { background: #f5f8ff; }
 .basket-tbl .kdv-hariç td { padding: 10px 6px; text-align: center; background: #E2EFDA; color: #333; font-size: 13px; }
+.basket-tbl .iskonto td { padding: 10px 6px; text-align: center; background: #FFF3CD; color: #7D4E00; font-size: 13px; }
+.basket-tbl .iskonto-sonrasi td { padding: 10px 6px; text-align: center; background: #D4EDDA; color: #155724; font-size: 13px; font-weight: bold; }
 .basket-tbl .kdv-dahil td { padding: 12px 6px; text-align: center; background: #1F4E79; color: #fff; font-weight: bold; font-size: 16px; }
 .del-btn { background: none; border: none; color: #c0392b; font-size: 18px; cursor: pointer; }
 
@@ -165,7 +167,7 @@ async function loadData() {
       fetchSheet('Envanter', 0, 1, 2, 4),
       fetchSheet('MW Torç ve Sarfları', 0, 1, 4, 3),
       fetchSheet('MW Kaynak Makinaları', 0, 1, 4, 3),
-      fetchSheet('Trafimet', 0, 1, 3, null)
+      fetchSheet('Trafimet', 0, 1, 2, null)
     ]);
     products = [...envanter, ...torc, ...makina, ...trafimet];
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.';
@@ -230,7 +232,6 @@ function search(q) {
     return;
   }
 
-  // Tam barkod eşleşmesi varsa direkt seç
   var exact = products.find(p => p.barcode === q);
   if (exact) {
     showResult(exact);
@@ -238,7 +239,6 @@ function search(q) {
     return;
   }
 
-  // İsimde veya barkodda geçen tüm ürünleri bul
   var ql = q.toLowerCase();
   var matches = products.filter(p => p.name.toLowerCase().includes(ql) || p.barcode.toLowerCase().includes(ql));
 
@@ -254,7 +254,6 @@ function search(q) {
     return;
   }
 
-  // Birden fazla eşleşme - liste göster
   showResult(matches[0]);
   var html = '<div class="sug-count">' + matches.length + ' eşleşme - seçin:</div>';
   html += matches.slice(0, 30).map(function(p) {
@@ -302,14 +301,19 @@ function renderBasket() {
     return '<tr class="item-row"><td>' + item.name + '</td><td>' + (item.price != null ? Number(item.price).toFixed(2) + ' ₺' : '—') + '</td><td>' + item.qty + '</td><td>' + (item.price != null ? sub.toFixed(2) + ' ₺' : '—') + '</td><td><button class="del-btn" onclick="removeFromBasket(\'' + item.barcode + '\')">✕</button></td></tr>';
   }).join('');
 
-  var kdvDahil = (total * 1.20).toFixed(2);
+  var iskonto = total * 0.10;
+  var iskontoluToplam = total - iskonto;
+  var kdvTutari = iskontoluToplam * 0.20;
+  var kdvDahil = iskontoluToplam * 1.20;
 
   el.innerHTML = '<table class="basket-tbl">' +
     '<thead><tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr></thead>' +
     '<tbody>' + rows + '</tbody>' +
     '<tfoot>' +
-    '<tr class="kdv-hariç"><td colspan="3" style="text-align:right;padding-right:10px">KDV Hariç (%20)</td><td colspan="2">' + total.toFixed(2) + ' ₺</td></tr>' +
-    '<tr class="kdv-dahil"><td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam</td><td colspan="2">' + kdvDahil + ' ₺</td></tr>' +
+    '<tr class="kdv-hariç"><td colspan="3" style="text-align:right;padding-right:10px">KDV Hariç Ara Toplam</td><td colspan="2">' + total.toFixed(2) + ' ₺</td></tr>' +
+    '<tr class="iskonto"><td colspan="3" style="text-align:right;padding-right:10px">%10 İskonto</td><td colspan="2">-' + iskonto.toFixed(2) + ' ₺</td></tr>' +
+    '<tr class="iskonto-sonrasi"><td colspan="3" style="text-align:right;padding-right:10px">İskonto Sonrası Toplam</td><td colspan="2">' + iskontoluToplam.toFixed(2) + ' ₺</td></tr>' +
+    '<tr class="kdv-dahil"><td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam (%20)</td><td colspan="2">' + kdvDahil.toFixed(2) + ' ₺</td></tr>' +
     '</tfoot></table>';
 }
 
@@ -349,7 +353,6 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     reader = new ZXing.BrowserMultiFormatReader(hints);
 
-    // Arka kamerayı yüksek çözünürlükte kullan
     var constraints = {
       audio: false,
       video: {
@@ -379,4 +382,4 @@ document.getElementById('closeBtn').addEventListener('click', stopCam);
 loadData();
 </script>
 </body>
-</html>
+  </html>
