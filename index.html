@@ -163,8 +163,8 @@ async function loadData() {
     document.getElementById('infoBox').textContent = 'Veriler yükleniyor...';
     const [envanter, torc, makina] = await Promise.all([
       fetchSheet('Envanter', 0, 1, 2, 4),
-      fetchSheet('Torç ve Sarfları', 0, 1, 2, 3),
-      fetchSheet('Kaynak Makinaları', 0, 1, 2, 3)
+      fetchSheet('Torç ve Sarfları', 0, 1, 4, 3),
+      fetchSheet('Kaynak Makinaları', 0, 1, 4, 3)
     ]);
     products = [...envanter, ...torc, ...makina];
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.';
@@ -193,8 +193,7 @@ function showResult(found) {
 
   if (found) {
     nameEl.textContent = found.name || '—';
-    var currency = (found.sheet === 'Torç ve Sarfları' || found.sheet === 'Kaynak Makinaları') ? ' $' : ' ₺';
-    priceEl.textContent = found.price != null ? Number(found.price).toFixed(2) + currency : '—';
+    priceEl.textContent = found.price != null ? Number(found.price).toFixed(2) + ' ₺' : '—';
     statusEl.textContent = '✓ Bulundu'; statusEl.style.color = '#1a7a4a';
     dateEl.textContent = formatDate(found.updated);
     addBtn.disabled = false; currentProduct = found;
@@ -297,7 +296,6 @@ function renderBasket() {
   }
   var total = 0;
   var rows = basket.map(item => {
-    var cur = (item.sheet === 'Torç ve Sarfları' || item.sheet === 'Kaynak Makinaları') ? ' $' : ' ₺';
     var sub = item.price != null ? item.price * item.qty : 0;
     total += sub;
     return '<tr class="item-row"><td>' + item.name + '</td><td>' + (item.price != null ? Number(item.price).toFixed(2) + ' ₺' : '—') + '</td><td>' + item.qty + '</td><td>' + (item.price != null ? sub.toFixed(2) + ' ₺' : '—') + '</td><td><button class="del-btn" onclick="removeFromBasket(\'' + item.barcode + '\')">✕</button></td></tr>';
