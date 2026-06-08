@@ -167,7 +167,7 @@ async function loadData() {
       fetchSheet('Envanter', 0, 1, 2, 4),
       fetchSheet('MW Torç ve Sarfları', 0, 1, 4, 3),
       fetchSheet('MW Kaynak Makinaları', 0, 1, 4, 3),
-      fetchSheet('Trafimet', 0, 1, 2, null)
+      fetchSheet('Trafimet', 0, 1, 3, null)
     ]);
     products = [...envanter, ...torc, ...makina, ...trafimet];
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.';
