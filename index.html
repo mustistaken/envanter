@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teknikel Envanter</title>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f0f4f8; min-height: 100vh; padding: 16px; }
@@ -114,7 +114,7 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
 
 <div class="overlay" id="overlay">
   <div class="video-wrap">
-    <video id="video" autoplay playsinline muted></video>
+    <div id="video" style="width:300px;height:220px;border-radius:10px;overflow:hidden;"></div>
     <div class="frame"></div>
   </div>
   <div class="overlay-hint">Barkodu yeşil çerçeveye getirin</div>
@@ -245,19 +245,36 @@ function showTab(tab) {
 
 document.getElementById('searchInput').addEventListener('input', e => search(e.target.value));
 
-var reader = null;
-document.getElementById('scanBtn').addEventListener('click', async () => {
+document.getElementById('scanBtn').addEventListener('click', () => {
   document.getElementById('overlay').classList.add('active');
-  try {
-    reader = new ZXing.BrowserMultiFormatReader();
-    await reader.decodeFromVideoDevice(null, 'video', result => {
-      if (result) { var val = result.getText(); document.getElementById('searchInput').value = val; search(val); stopCam(); }
-    });
-  } catch(e) { alert('Kamera açılamadı: ' + e.message); stopCam(); }
+  Quagga.init({
+    inputStream: {
+      name: "Live",
+      type: "LiveStream",
+      target: document.getElementById('video'),
+      constraints: { facingMode: "environment", width: 640, height: 480 }
+    },
+    decoder: {
+      readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "upc_reader"]
+    },
+    locate: true
+  }, function(err) {
+    if (err) { alert('Kamera açılamadı: ' + err); stopCam(); return; }
+    Quagga.start();
+  });
+
+  Quagga.onDetected(function(result) {
+    var code = result.codeResult.code;
+    if (code) {
+      document.getElementById('searchInput').value = code;
+      search(code);
+      stopCam();
+    }
+  });
 });
 
 function stopCam() {
-  if (reader) { reader.reset(); reader = null; }
+  Quagga.stop();
   document.getElementById('overlay').classList.remove('active');
 }
 
