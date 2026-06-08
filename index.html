@@ -161,7 +161,7 @@ async function fetchSheet(sheetName, barcodeCol, nameCol, priceCol, updatedCol) 
 async function loadData() {
   try {
     document.getElementById('infoBox').textContent = 'Veriler yükleniyor...';
-    const [envanter, torc, makina] = await Promise.all([
+    const [envanter, MW torc, MW makina] = await Promise.all([
       fetchSheet('Envanter', 0, 1, 2, 4),
       fetchSheet('Torç ve Sarfları', 0, 1, 4, 3),
       fetchSheet('Kaynak Makinaları', 0, 1, 4, 3)
