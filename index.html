@@ -124,7 +124,7 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
 
 <div class="overlay" id="overlay">
   <div class="video-wrap">
-    <video id="video" autoplay playsinline muted style="width:300px;height:220px;border-radius:10px;object-fit:cover;"></video>
+    <video id="video" autoplay playsinline muted></video>
     <div class="frame"></div>
   </div>
   <div class="overlay-hint">Barkodu yeşil çerçeveye getirin</div>
@@ -132,36 +132,47 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
 </div>
 
 <script>
-const SHEET_ID = '1qvpFL1SnYDqs9DpHIiWm1oJ_x362-IyHriyHzO_lLCs';
+const SHEET_ID = '16CVm4e5Zl_WPSHjDVnpjoS0L1xWB3TwqIUIXejl6efU';
 
 let products = [], basket = [], currentProduct = null;
 
-async function fetchSheet(sheetName, barcodeCol, nameCol, priceCol, updatedCol) {
-  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(sheetName);
+// Her sayfa için sütun yapısı: (sheetName, barcodeCol, nameCol, priceCol, updatedCol)
+// priceCol: TL fiyatın bulunduğu sütun indeksi
+// updatedCol: null ise tarih yok
+const SHEETS = [
+  { name: 'Envanter',                    b:0, n:1, p:2,    u:4    },
+  { name: 'MW Torç ve Sarfları',         b:0, n:1, p:4,    u:3    },
+  { name: 'MW Kaynak Makinaları',        b:0, n:1, p:4,    u:3    },
+  { name: 'Trafimet',                    b:0, n:1, p:3,    u:null },
+  { name: 'Kaynak Tamamlayıcı Ürünler', b:0, n:1, p:4,    u:null },
+  { name: 'Özlü Teller',                b:0, n:1, p:4,    u:null },
+  { name: 'MIG-MAG ve TIG Telleri',     b:0, n:1, p:4,    u:null },
+];
+
+async function fetchSheet(cfg) {
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
   try {
     const res = await fetch(url);
     const text = await res.text();
     const json = JSON.parse(text.match(/setResponse\(([\s\S]*?)\);/)[1]);
-    return json.table.rows.filter(r => r.c && r.c[nameCol] && r.c[nameCol].v).map(r => ({
-      barcode: barcodeCol !== null && r.c[barcodeCol] ? String(r.c[barcodeCol].v).trim() : '',
-      name: String(r.c[nameCol].v || ''),
-      price: r.c[priceCol] ? r.c[priceCol].v : null,
-      updated: updatedCol !== null && r.c[updatedCol] ? r.c[updatedCol].v : null,
-      sheet: sheetName
-    }));
+    return json.table.rows
+      .filter(r => r.c && r.c[cfg.n] && r.c[cfg.n].v)
+      .map(r => ({
+        barcode: r.c[cfg.b] ? String(r.c[cfg.b].v).trim() : '',
+        name:    String(r.c[cfg.n].v || ''),
+        price:   r.c[cfg.p] ? r.c[cfg.p].v : null,
+        updated: cfg.u !== null && r.c[cfg.u] ? r.c[cfg.u].v : null,
+        sheet:   cfg.name
+      }));
   } catch(e) { return []; }
 }
 
 async function loadData() {
+  document.getElementById('infoBox').textContent = 'Veriler yükleniyor...';
   try {
-    document.getElementById('infoBox').textContent = 'Veriler yükleniyor...';
-    const [envanter, torc, makina, trafimet] = await Promise.all([
-      fetchSheet('Envanter', 0, 1, 2, 4),
-      fetchSheet('MW Torç ve Sarfları', 0, 1, 4, 3),
-      fetchSheet('MW Kaynak Makinaları', 0, 1, 4, 3),
-      fetchSheet('Trafimet', 0, 1, 3, null)
-    ]);
-    products = [...envanter, ...torc, ...makina, ...trafimet];
+    const results = await Promise.all(SHEETS.map(fetchSheet));
+    products = results.flat();
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.';
   } catch(e) {
     document.getElementById('infoBox').textContent = 'Veri yüklenemedi.';
@@ -171,49 +182,52 @@ async function loadData() {
 function formatDate(val) {
   if (val === null || val === undefined || val === '') return '—';
   var s = String(val).trim();
-  // Google Sheets Date() formatı
   if (s.startsWith('Date(')) {
     var p = s.replace('Date(','').replace(')','').split(',');
     var d = new Date(parseInt(p[0]), parseInt(p[1]), parseInt(p[2]));
     return d.toLocaleDateString('tr-TR');
   }
-  // Zaten dd.mm.yyyy formatında metin ise direkt döndür
   if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
-  // yyyy-mm-dd formatı
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    var parts = s.substring(0, 10).split('-');
-    return parts[2] + '.' + parts[1] + '.' + parts[0];
+    var pts = s.substring(0,10).split('-');
+    return pts[2]+'.'+pts[1]+'.'+pts[0];
   }
   return s;
 }
 
+function formatPrice(val) {
+  if (val == null) return '—';
+  var n = Number(val);
+  if (isNaN(n)) return String(val);
+  return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ₺';
+}
+
 function showResult(found) {
-  var nameEl = document.getElementById('resName');
-  var priceEl = document.getElementById('resPrice');
+  var nameEl   = document.getElementById('resName');
+  var priceEl  = document.getElementById('resPrice');
   var statusEl = document.getElementById('resStatus');
-  var dateEl = document.getElementById('resDate');
-  var addBtn = document.getElementById('addBtn');
+  var dateEl   = document.getElementById('resDate');
+  var addBtn   = document.getElementById('addBtn');
 
   if (found) {
-    nameEl.textContent = found.name || '—';
-    priceEl.textContent = found.price != null ? Number(found.price).toFixed(2) + ' ₺' : '—';
+    nameEl.textContent   = found.name || '—';
+    priceEl.textContent  = formatPrice(found.price);
     statusEl.textContent = '✓ Bulundu';
     statusEl.style.color = '#1a7a4a';
-    dateEl.textContent = formatDate(found.updated);
-    addBtn.disabled = false;
-    currentProduct = found;
+    dateEl.textContent   = formatDate(found.updated);
+    addBtn.disabled      = false;
+    currentProduct       = found;
   } else {
-    nameEl.textContent = 'Bulunamadı';
-    priceEl.textContent = '—';
+    nameEl.textContent   = 'Bulunamadı';
+    priceEl.textContent  = '—';
     statusEl.textContent = '✗ Bulunamadı';
     statusEl.style.color = '#c0392b';
-    dateEl.textContent = '—';
-    addBtn.disabled = true;
-    currentProduct = null;
+    dateEl.textContent   = '—';
+    addBtn.disabled      = true;
+    currentProduct       = null;
   }
 }
 
-// DÜZELTİLDİ: barkod yerine products dizisindeki index ile seçim
 function selectProduct(idx) {
   var p = products[idx];
   if (p) {
@@ -228,45 +242,30 @@ function search(q) {
   var sugEl = document.getElementById('suggestions');
 
   if (!q) {
-    document.getElementById('resName').textContent = '—';
-    document.getElementById('resPrice').textContent = '—';
+    document.getElementById('resName').textContent   = '—';
+    document.getElementById('resPrice').textContent  = '—';
     document.getElementById('resStatus').textContent = 'Bekliyor...';
     document.getElementById('resStatus').style.color = '#888';
-    document.getElementById('resDate').textContent = '—';
-    document.getElementById('addBtn').disabled = true;
+    document.getElementById('resDate').textContent   = '—';
+    document.getElementById('addBtn').disabled       = true;
     currentProduct = null;
     sugEl.innerHTML = '';
     return;
   }
 
-  // Tam barkod eşleşmesi
   var exact = products.find(p => p.barcode === q);
-  if (exact) {
-    showResult(exact);
-    sugEl.innerHTML = '';
-    return;
-  }
+  if (exact) { showResult(exact); sugEl.innerHTML = ''; return; }
 
   var ql = q.toLowerCase();
   var matches = products.filter(p =>
     p.name.toLowerCase().includes(ql) || p.barcode.toLowerCase().includes(ql)
   );
 
-  if (matches.length === 0) {
-    showResult(null);
-    sugEl.innerHTML = '';
-    return;
-  }
+  if (matches.length === 0) { showResult(null); sugEl.innerHTML = ''; return; }
 
-  // Tek eşleşme veya ilk sonucu göster
   showResult(matches[0]);
+  if (matches.length === 1) { sugEl.innerHTML = ''; return; }
 
-  if (matches.length === 1) {
-    sugEl.innerHTML = '';
-    return;
-  }
-
-  // DÜZELTİLDİ: onclick'te index kullanılıyor, barkod değil
   var html = '<div class="sug-count">' + matches.length + ' eşleşme — seçin:</div>';
   html += matches.slice(0, 30).map(function(p) {
     var idx = products.indexOf(p);
@@ -274,7 +273,7 @@ function search(q) {
       '<span class="sug-name">' + p.name +
         (p.barcode ? '<br><span class="sug-barcode">' + p.barcode + '</span>' : '') +
       '</span>' +
-      '<span class="sug-price">' + (p.price != null ? Number(p.price).toFixed(2) + ' ₺' : '—') + '</span>' +
+      '<span class="sug-price">' + formatPrice(p.price) + '</span>' +
       '</div>';
   }).join('');
   sugEl.innerHTML = html;
@@ -283,10 +282,9 @@ function search(q) {
 function addToBasket() {
   if (!currentProduct) return;
   var qty = parseInt(document.getElementById('qtyInput').value) || 1;
-  // DÜZELTİLDİ: barkod yerine name+sheet kombinasyonu ile eşleşme
   var key = currentProduct.name + '|' + currentProduct.sheet;
   var existing = basket.find(i => (i.name + '|' + i.sheet) === key);
-  if (existing) { existing.qty += qty; } else { basket.push({...currentProduct, qty}); }
+  if (existing) { existing.qty += qty; } else { basket.push(Object.assign({}, currentProduct, {qty: qty})); }
   renderBasket(); updateBadge();
   document.getElementById('searchInput').value = '';
   document.getElementById('qtyInput').value = 1;
@@ -313,31 +311,31 @@ function renderBasket() {
   }
   var total = 0;
   var rows = basket.map(function(item, idx) {
-    var sub = item.price != null ? item.price * item.qty : 0;
+    var sub = item.price != null ? Number(item.price) * item.qty : 0;
     total += sub;
     return '<tr class="item-row"><td>' + item.name + '</td>' +
-      '<td>' + (item.price != null ? Number(item.price).toFixed(2) + ' ₺' : '—') + '</td>' +
+      '<td>' + formatPrice(item.price) + '</td>' +
       '<td>' + item.qty + '</td>' +
-      '<td>' + (item.price != null ? sub.toFixed(2) + ' ₺' : '—') + '</td>' +
+      '<td>' + (item.price != null ? formatPrice(sub) : '—') + '</td>' +
       '<td><button class="del-btn" onclick="removeFromBasket(' + idx + ')">✕</button></td></tr>';
   }).join('');
 
-  var iskonto = total * 0.10;
+  var iskonto       = total * 0.10;
   var iskontoluToplam = total - iskonto;
-  var kdvDahil = iskontoluToplam * 1.20;
+  var kdvDahil      = iskontoluToplam * 1.20;
 
   el.innerHTML = '<table class="basket-tbl">' +
     '<thead><tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr></thead>' +
     '<tbody>' + rows + '</tbody>' +
     '<tfoot>' +
-    '<tr class="iskonto"><td colspan="3" style="text-align:right;padding-right:10px">%10 İskonto</td><td colspan="2">-' + iskonto.toFixed(2) + ' ₺</td></tr>' +
-    '<tr class="iskonto-sonrasi"><td colspan="3" style="text-align:right;padding-right:10px">İskonto Sonrası Toplam</td><td colspan="2">' + iskontoluToplam.toFixed(2) + ' ₺</td></tr>' +
-    '<tr class="kdv-dahil"><td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam (%20)</td><td colspan="2">' + kdvDahil.toFixed(2) + ' ₺</td></tr>' +
+    '<tr class="iskonto"><td colspan="3" style="text-align:right;padding-right:10px">%10 İskonto</td><td colspan="2">-' + formatPrice(iskonto) + '</td></tr>' +
+    '<tr class="iskonto-sonrasi"><td colspan="3" style="text-align:right;padding-right:10px">İskonto Sonrası Toplam</td><td colspan="2">' + formatPrice(iskontoluToplam) + '</td></tr>' +
+    '<tr class="kdv-dahil"><td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam (%20)</td><td colspan="2">' + formatPrice(kdvDahil) + '</td></tr>' +
     '</tfoot></table>';
 }
 
 function updateBadge() {
-  var count = basket.reduce((s, i) => s + i.qty, 0);
+  var count = basket.reduce(function(s,i){ return s+i.qty; }, 0);
   document.getElementById('sepetTab').innerHTML = count > 0
     ? '🛒 Sepet <span class="badge">' + count + '</span>'
     : '🛒 Sepet';
@@ -351,25 +349,24 @@ function showTab(tab) {
   tabs[1].className = 'tab ' + (tab === 'sepet' ? 'active' : 'inactive');
 }
 
-document.getElementById('searchInput').addEventListener('input', e => search(e.target.value));
+document.getElementById('searchInput').addEventListener('input', function(e){ search(e.target.value); });
 
 var reader = null;
-document.getElementById('scanBtn').addEventListener('click', async () => {
+document.getElementById('scanBtn').addEventListener('click', async function() {
   document.getElementById('overlay').classList.add('active');
   try {
     var hints = new Map();
-    var formats = [
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
       ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.CODE_128,
       ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A,
-      ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.ITF,
-      ZXing.BarcodeFormat.CODABAR, ZXing.BarcodeFormat.DATA_MATRIX
-    ];
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      ZXing.BarcodeFormat.EAN_8,  ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,  ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.CODABAR,ZXing.BarcodeFormat.DATA_MATRIX
+    ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     reader = new ZXing.BrowserMultiFormatReader(hints);
     await reader.decodeFromConstraints(
-      { audio: false, video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } },
+      { audio: false, video: { facingMode: 'environment', width:{ideal:1920}, height:{ideal:1080} } },
       'video',
       function(result) {
         if (result) {
@@ -387,8 +384,8 @@ function stopCam() {
   if (reader) { reader.reset(); reader = null; }
   document.getElementById('overlay').classList.remove('active');
 }
-
 document.getElementById('closeBtn').addEventListener('click', stopCam);
+
 loadData();
 </script>
 </body>
