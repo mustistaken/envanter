@@ -159,7 +159,7 @@ async function fetchSheet(cfg) {
     return json.table.rows
       .filter(r => r.c && r.c[cfg.n] && r.c[cfg.n].v)
       .map(r => ({
-        barcode: r.c[cfg.b] ? String(r.c[cfg.b].v).trim() : '',
+        barcode: r.c[cfg.b] ? (function(v){ var n=Number(v); return (!isNaN(n)&&isFinite(n)) ? String(Math.round(n)) : String(v).trim(); })(r.c[cfg.b].v) : '',
         name:    String(r.c[cfg.n].v || ''),
         price:   r.c[cfg.p] ? r.c[cfg.p].v : null,
         updated: cfg.u !== null && r.c[cfg.u] ? r.c[cfg.u].v : null,
