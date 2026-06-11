@@ -370,7 +370,9 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
       'video',
       function(result) {
         if (result) {
-          var val = result.getText();
+          var val = result.getText().trim();
+          // DEBUG: okunan değeri göster
+          alert('Okunan kod: [' + val + ']\nKarakter sayısı: ' + val.length);
           document.getElementById('searchInput').value = val;
           search(val);
           stopCam();
