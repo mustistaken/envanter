@@ -157,7 +157,7 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
 </div>
 
 <script>
-const SHEET_ID = '1OAgPlsdFpEOa1FF4FFAsEaUdyZEtpZZ32IMpbEG76cM';
+const SHEET_ID = '1sjSuZf9MufnucsYQbDMnUyanamDdJCpKPmKc0_CvLSU';
 
 let products = [], basket = [], currentProduct = null, iskontoOrani = 0;
 
@@ -178,9 +178,6 @@ function setIskontoCustom(val) {
   renderBasket();
 }
 
-// Her sayfa için sütun yapısı: (sheetName, barcodeCol, nameCol, priceCol, updatedCol)
-// priceCol: TL fiyatın bulunduğu sütun indeksi
-// updatedCol: null ise tarih yok
 const SHEETS = [
   { name: 'Envanter',                    b:0, n:1, p:2,    u:4    },
   { name: 'MW Torç ve Sarfları',         b:0, n:1, p:4,    u:3    },
@@ -189,6 +186,7 @@ const SHEETS = [
   { name: 'Kaynak Tamamlayıcı Ürünler', b:0, n:1, p:4,    u:null },
   { name: 'Özlü Teller',                b:0, n:1, p:4,    u:null },
   { name: 'MIG-MAG ve TIG Telleri',     b:0, n:1, p:4,    u:null },
+  { name: 'Örtülü Elektrodlar',         b:0, n:1, p:4,    u:null },
 ];
 
 async function fetchSheet(cfg) {
