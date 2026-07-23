@@ -170,9 +170,11 @@ function setIskonto(val, btn) {
 }
 
 function setIskontoCustom(val) {
+  var input = document.getElementById('iskontoCustom');
   var n = parseFloat(val);
   if (isNaN(n) || n < 0) n = 0;
   if (n > 100) n = 100;
+  if (val !== '' && Number(val) !== n) input.value = n;
   iskontoOrani = n;
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   renderBasket();
@@ -194,8 +196,11 @@ async function fetchSheet(cfg) {
               '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
   try {
     const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    const json = JSON.parse(text.match(/setResponse\(([\s\S]*?)\);/)[1]);
+    const match = text.match(/setResponse\(([\s\S]*?)\);/);
+    if (!match) throw new Error('Geçersiz Google Sheets yanıtı');
+    const json = JSON.parse(match[1]);
     return json.table.rows
       .filter(r => r.c && r.c[cfg.n] && r.c[cfg.n].v)
       .map(r => ({
@@ -205,15 +210,21 @@ async function fetchSheet(cfg) {
         updated: cfg.u !== null && r.c[cfg.u] ? r.c[cfg.u].v : null,
         sheet:   cfg.name
       }));
-  } catch(e) { return []; }
+  } catch(e) {
+    console.error(cfg.name + ' yüklenemedi:', e);
+    return null;
+  }
 }
 
 async function loadData() {
   document.getElementById('infoBox').textContent = 'Veriler yükleniyor...';
   try {
     const results = await Promise.all(SHEETS.map(fetchSheet));
-    products = results.flat();
-    document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.';
+    const failedCount = results.filter(function(result){ return result === null; }).length;
+    products = results.filter(Array.isArray).flat();
+    if (!products.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
+    document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.' +
+      (failedCount ? ' ' + failedCount + ' sayfa yüklenemedi.' : '');
   } catch(e) {
     document.getElementById('infoBox').textContent = 'Veri yüklenemedi.';
   }
@@ -240,6 +251,15 @@ function formatPrice(val) {
   var n = Number(val);
   if (isNaN(n)) return String(val);
   return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ₺';
+}
+
+function escapeHtml(val) {
+  return String(val == null ? '' : val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function showResult(found) {
@@ -310,10 +330,10 @@ function search(q) {
   html += matches.slice(0, 30).map(function(p) {
     var idx = products.indexOf(p);
     return '<div class="sug-item" onclick="selectProduct(' + idx + ')">' +
-      '<span class="sug-name">' + p.name +
-        (p.barcode ? '<br><span class="sug-barcode">' + p.barcode + '</span>' : '') +
+      '<span class="sug-name">' + escapeHtml(p.name) +
+        (p.barcode ? '<br><span class="sug-barcode">' + escapeHtml(p.barcode) + '</span>' : '') +
       '</span>' +
-      '<span class="sug-price">' + formatPrice(p.price) + '</span>' +
+      '<span class="sug-price">' + escapeHtml(formatPrice(p.price)) + '</span>' +
       '</div>';
   }).join('');
   sugEl.innerHTML = html;
@@ -321,10 +341,18 @@ function search(q) {
 
 function addToBasket() {
   if (!currentProduct) return;
-  var qty = parseInt(document.getElementById('qtyInput').value) || 1;
+  var qtyEl = document.getElementById('qtyInput');
+  var qty = parseInt(qtyEl.value, 10);
+  if (!Number.isInteger(qty) || qty < 1) qty = 1;
+  if (qty > 9999) qty = 9999;
+  qtyEl.value = qty;
   var key = currentProduct.name + '|' + currentProduct.sheet;
   var existing = basket.find(i => (i.name + '|' + i.sheet) === key);
-  if (existing) { existing.qty += qty; } else { basket.push(Object.assign({}, currentProduct, {qty: qty})); }
+  if (existing) {
+    existing.qty = Math.min(9999, existing.qty + qty);
+  } else {
+    basket.push(Object.assign({}, currentProduct, {qty: qty}));
+  }
   renderBasket(); updateBadge();
   document.getElementById('searchInput').value = '';
   document.getElementById('qtyInput').value = 1;
@@ -353,8 +381,8 @@ function renderBasket() {
   var rows = basket.map(function(item, idx) {
     var sub = item.price != null ? Number(item.price) * item.qty : 0;
     total += sub;
-    return '<tr class="item-row"><td>' + item.name + '</td>' +
-      '<td>' + formatPrice(item.price) + '</td>' +
+    return '<tr class="item-row"><td>' + escapeHtml(item.name) + '</td>' +
+      '<td>' + escapeHtml(formatPrice(item.price)) + '</td>' +
       '<td>' + item.qty + '</td>' +
       '<td>' + (item.price != null ? formatPrice(sub) : '—') + '</td>' +
       '<td><button class="del-btn" onclick="removeFromBasket(' + idx + ')">✕</button></td></tr>';
@@ -411,8 +439,6 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
       function(result) {
         if (result) {
           var val = result.getText().trim();
-          // DEBUG: okunan değeri göster
-          alert('Okunan kod: [' + val + ']\nKarakter sayısı: ' + val.length);
           document.getElementById('searchInput').value = val;
           search(val);
           stopCam();
@@ -432,3 +458,4 @@ loadData();
 </script>
 </body>
 </html>
+
