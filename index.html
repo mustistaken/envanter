@@ -6,72 +6,250 @@
 <title>Teknikel Envanter</title>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <style>
+:root {
+  --navy-950: #071426;
+  --navy-900: #0b1f38;
+  --navy-800: #12345a;
+  --blue-600: #1769e0;
+  --blue-500: #2d7ff0;
+  --cyan-400: #54d2e9;
+  --amber-400: #f6b94b;
+  --green-500: #16a26a;
+  --red-500: #dc4c56;
+  --ink-900: #142033;
+  --ink-700: #43516a;
+  --ink-500: #718099;
+  --surface: #ffffff;
+  --surface-soft: #f5f8fc;
+  --line: #dce5f0;
+  --shadow: 0 20px 60px rgba(10, 31, 57, .12);
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: Arial, sans-serif; background: #f0f4f8; min-height: 100vh; padding: 16px; }
-.app { max-width: 480px; margin: 0 auto; }
-.header { background: #1F4E79; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: center; }
-.header h1 { font-size: 17px; font-weight: bold; color: #fff; }
-.header p { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 4px; }
-.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-.tab { flex: 1; padding: 10px; text-align: center; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; border: none; }
-.tab.active { background: #1F4E79; color: #fff; }
-.tab.inactive { background: #fff; color: #1F4E79; border: 1px solid #1F4E79; }
-.card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-.label { font-size: 12px; font-weight: bold; color: #555; margin-bottom: 8px; }
-.input-row { display: flex; gap: 8px; }
-input[type=text], input[type=number] { height: 44px; border: 1px solid #ccc; border-radius: 8px; padding: 0 14px; font-size: 15px; outline: none; }
-input[type=text] { flex: 1; background: #FFF9E6; }
-input[type=number] { width: 80px; text-align: center; background: #FFF9E6; }
-input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
-.scan-btn { width: 44px; height: 44px; border: 1px solid #ccc; border-radius: 8px; background: #f5f5f5; cursor: pointer; font-size: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.scan-btn:active { background: #1F4E79; }
-.res-table { width: 100%; border-collapse: collapse; border-radius: 10px; overflow: hidden; }
-.res-table th { background: #1F4E79; color: #fff; font-size: 12px; padding: 10px; text-align: center; }
-.res-table td { padding: 12px 10px; text-align: center; font-size: 14px; }
-.update-row { display: flex; margin-top: 6px; border-radius: 8px; overflow: hidden; }
-.update-label { background: #1F4E79; color: #fff; font-size: 11px; font-weight: bold; padding: 8px 12px; white-space: nowrap; }
-.update-val { background: #f5f5f5; font-size: 12px; color: #555; padding: 8px 12px; flex: 1; text-align: center; }
-.qty-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.qty-row label { font-size: 13px; font-weight: bold; color: #555; }
-.add-btn { width: 100%; margin-top: 10px; padding: 12px; background: #1F4E79; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
-.add-btn:disabled { background: #aaa; cursor: not-allowed; }
-.suggestions { margin-top: 8px; max-height: 260px; overflow-y: auto; border-radius: 8px; }
+html { background: #edf3f9; }
+body {
+  min-height: 100vh;
+  color: var(--ink-900);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(45,127,240,.14), transparent 32rem),
+    radial-gradient(circle at 100% 20%, rgba(84,210,233,.12), transparent 28rem),
+    #edf3f9;
+  padding: 24px 16px 48px;
+}
+button, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+.app { width: min(100%, 680px); margin: 0 auto; }
+.header {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 14px;
+  padding: 24px;
+  color: #fff;
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--navy-950), var(--navy-800) 62%, #145f9e);
+  box-shadow: var(--shadow);
+}
+.header::before, .header::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.header::before {
+  width: 220px; height: 220px; right: -90px; top: -110px;
+  background: rgba(84,210,233,.16);
+  border: 1px solid rgba(255,255,255,.12);
+}
+.header::after {
+  width: 110px; height: 110px; right: 38px; bottom: -74px;
+  background: rgba(246,185,75,.16);
+}
+.topbar { position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; }
+.brand-copy { min-width: 0; flex: 1; }
+.eyebrow { display: block; margin-bottom: 4px; color: var(--cyan-400); font-size: 10px; font-weight: 800; letter-spacing: .18em; }
+.header h1 { font-size: clamp(20px, 5vw, 27px); line-height: 1.08; letter-spacing: -.03em; }
+.header p { margin-top: 7px; color: rgba(255,255,255,.68); font-size: 12px; line-height: 1.45; }
+.sync-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.82);
+  font-size: 10px; font-weight: 700;
+}
+.sync-pill span { width: 7px; height: 7px; border-radius: 50%; background: #53dda2; box-shadow: 0 0 0 4px rgba(83,221,162,.13); }
+.header-side {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  margin-left: 8px;
+}
+.magmaweld-logo {
+  display: block;
+  width: 190px;
+  max-width: 28vw;
+  height: auto;
+  filter: brightness(0) invert(1) drop-shadow(0 5px 14px rgba(0,0,0,.18));
+}
+.tabs {
+  position: sticky; top: 10px; z-index: 20;
+  display: flex; gap: 6px;
+  margin-bottom: 14px; padding: 6px;
+  border: 1px solid rgba(220,229,240,.85);
+  border-radius: 16px;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 8px 26px rgba(16,43,75,.08);
+  backdrop-filter: blur(14px);
+}
+.tab {
+  flex: 1; min-height: 44px; padding: 10px 14px;
+  border: 0; border-radius: 11px;
+  font-size: 13px; font-weight: 800; cursor: pointer;
+  transition: transform .18s ease, background .18s ease, color .18s ease;
+}
+.tab:active { transform: scale(.98); }
+.tab.active { color: #fff; background: linear-gradient(135deg, var(--navy-800), var(--blue-600)); box-shadow: 0 7px 16px rgba(23,105,224,.2); }
+.tab.inactive { color: var(--ink-700); background: transparent; }
+.card, .iskonto-sec {
+  margin-bottom: 12px; padding: 20px;
+  border: 1px solid var(--line); border-radius: 20px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 10px 30px rgba(15,42,73,.07);
+}
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 17px; }
+.section-kicker { display: block; margin-bottom: 4px; color: var(--blue-600); font-size: 10px; font-weight: 900; letter-spacing: .15em; }
+.section-heading h2 { font-size: 18px; line-height: 1.2; letter-spacing: -.025em; }
+.shortcut-hint {
+  flex: 0 0 auto; padding: 6px 9px;
+  border: 1px solid #cfe0f3; border-radius: 999px;
+  background: #f3f8fe; color: #52708e;
+  font-size: 10px; font-weight: 700;
+}
+.label, .field-label { display: block; margin-bottom: 9px; color: var(--ink-700); font-size: 11px; font-weight: 900; letter-spacing: .06em; }
+.input-row { display: flex; gap: 9px; }
+input[type=text], input[type=number] {
+  height: 50px;
+  border: 1.5px solid #cfdae7; border-radius: 14px;
+  background: #f8fbfe; color: var(--ink-900);
+  outline: none; transition: border .18s ease, box-shadow .18s ease, background .18s ease;
+}
+input[type=text] { min-width: 0; flex: 1; padding: 0 16px; font-size: 15px; }
+input[type=number] { width: 88px; padding: 0 10px; text-align: center; font-size: 15px; font-weight: 800; }
+input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0 4px rgba(45,127,240,.11); }
+.scan-btn {
+  width: 50px; height: 50px; flex: 0 0 50px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 14px;
+  color: #fff; background: linear-gradient(145deg, var(--blue-500), var(--blue-600));
+  cursor: pointer; font-size: 21px;
+  box-shadow: 0 8px 18px rgba(23,105,224,.22);
+}
+.scan-btn:active { transform: translateY(1px); }
+.suggestions {
+  max-height: 280px; overflow-y: auto;
+  margin-top: 10px; border: 1px solid var(--line); border-radius: 14px;
+  background: #fff; box-shadow: 0 14px 30px rgba(10,31,57,.12);
+}
 .suggestions:empty { display: none; }
-.sug-item { padding: 12px 14px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #fff; }
-.sug-item:hover, .sug-item:active { background: #E2EFDA; }
-.sug-item:last-child { border-bottom: none; }
-.sug-name { font-size: 13px; color: #222; flex: 1; text-align: left; }
-.sug-price { font-size: 13px; font-weight: bold; color: #1F4E79; white-space: nowrap; }
-.sug-barcode { font-size: 11px; color: #999; }
-.sug-count { padding: 8px 14px; font-size: 12px; color: #888; background: #f5f5f5; text-align: center; border-radius: 8px 8px 0 0; }
-.info { text-align: center; font-size: 13px; color: #888; padding: 6px 0; }
-.badge { display: inline-block; background: #c0392b; color: #fff; border-radius: 10px; font-size: 11px; padding: 1px 6px; margin-left: 4px; }
-.empty-basket { text-align: center; color: #aaa; padding: 30px 0; font-size: 14px; }
-.clear-btn { width: 100%; margin-top: 10px; padding: 11px; background: #c0392b; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
-.iskonto-sec { background: #fff; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-.iskonto-sec .label { font-size: 12px; font-weight: bold; color: #555; margin-bottom: 10px; }
-.iskonto-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.isk-btn { flex: 1; min-width: 60px; padding: 9px 6px; border: 2px solid #1F4E79; border-radius: 8px; background: #fff; color: #1F4E79; font-size: 13px; font-weight: bold; cursor: pointer; text-align: center; }
-.isk-btn.active { background: #1F4E79; color: #fff; }
-.isk-custom { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.isk-custom input { width: 80px; height: 38px; border: 2px solid #1F4E79; border-radius: 8px; padding: 0 10px; font-size: 14px; font-weight: bold; color: #1F4E79; text-align: center; outline: none; }
-.isk-custom span { font-size: 13px; color: #555; }
-.basket-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-.basket-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
-.basket-tbl th { background: #1F4E79; color: #fff; padding: 10px 6px; text-align: center; }
-.basket-tbl .item-row td { padding: 10px 6px; text-align: center; border-bottom: 1px solid #eee; color: #222; background: #fff; }
-.basket-tbl .item-row:nth-child(even) td { background: #f5f8ff; }
-.basket-tbl .iskonto td { padding: 10px 6px; text-align: center; background: #FFF3CD; color: #7D4E00; font-size: 13px; }
-.basket-tbl .iskonto-sonrasi td { padding: 10px 6px; text-align: center; background: #D4EDDA; color: #155724; font-size: 13px; font-weight: bold; }
-.basket-tbl .kdv-dahil td { padding: 12px 6px; text-align: center; background: #1F4E79; color: #fff; font-weight: bold; font-size: 16px; }
-.del-btn { background: none; border: none; color: #c0392b; font-size: 18px; cursor: pointer; }
-.overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.88); z-index: 999; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+.sug-count { padding: 9px 13px; background: #f4f8fc; color: var(--ink-500); text-align: center; font-size: 11px; font-weight: 700; }
+.sug-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+.sug-item:last-child { border-bottom: 0; }
+.sug-item:hover, .sug-item:active { background: #edf6ff; }
+.sug-name { min-width: 0; flex: 1; color: var(--ink-900); font-size: 13px; line-height: 1.35; }
+.sug-barcode { color: var(--ink-500); font-size: 10px; }
+.sug-price { flex: 0 0 auto; color: var(--blue-600); font-size: 13px; font-weight: 900; }
+.result-panel {
+  overflow: hidden; margin-bottom: 12px;
+  border: 1px solid var(--line); border-radius: 20px;
+  background: var(--surface); box-shadow: 0 10px 30px rgba(15,42,73,.07);
+}
+.result-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px 12px; }
+.result-panel__head strong { font-size: 13px; }
+.result-panel__head span { color: var(--ink-500); font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+.res-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.res-table th { padding: 8px 10px; background: #f6f9fc; color: var(--ink-500); text-align: center; font-size: 9px; font-weight: 900; letter-spacing: .07em; }
+.res-table td { padding: 16px 10px; text-align: center; font-size: 13px; border-top: 1px solid #edf2f7; }
+#resName { background: #fff !important; text-align: left; padding-left: 18px; }
+#resPrice { background: #eef8ff !important; color: var(--blue-600) !important; }
+#resStatus { background: #fff !important; }
+.update-row { display: flex; align-items: center; padding: 12px 18px; border-top: 1px solid #edf2f7; background: #fbfcfe; }
+.update-label { color: var(--ink-500); font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.update-val { flex: 1; color: var(--ink-700); text-align: right; font-size: 11px; font-weight: 700; }
+.action-card { display: grid; grid-template-columns: 120px 1fr; align-items: end; gap: 12px; }
+.qty-row { display: block; margin: 0; }
+.qty-row label { display: block; margin-bottom: 9px; color: var(--ink-700); font-size: 11px; font-weight: 900; letter-spacing: .06em; }
+.add-btn {
+  min-height: 50px; margin: 0; padding: 12px 18px;
+  border: 0; border-radius: 14px;
+  color: #fff; background: linear-gradient(135deg, var(--navy-800), var(--blue-600));
+  cursor: pointer; font-size: 14px; font-weight: 900;
+  box-shadow: 0 9px 20px rgba(23,105,224,.2);
+}
+.add-btn:disabled { color: #9aa8b9; background: #e8edf3; box-shadow: none; cursor: not-allowed; }
+.info {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 7px;
+  padding: 2px 2px 0; color: var(--ink-500); font-size: 11px;
+}
+.info::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green-500); box-shadow: 0 0 0 4px rgba(22,162,106,.1); }
+.basket-intro { margin-bottom: 12px; padding: 5px 2px; }
+.basket-intro h2 { font-size: 20px; letter-spacing: -.03em; }
+.basket-intro p { margin-top: 5px; color: var(--ink-500); font-size: 12px; }
+.iskonto-sec .label { margin-bottom: 12px; }
+.iskonto-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.isk-btn {
+  min-width: 0; padding: 10px 6px;
+  border: 1.5px solid #ccdae9; border-radius: 11px;
+  background: #f8fbfe; color: var(--ink-700);
+  cursor: pointer; font-size: 12px; font-weight: 900;
+}
+.isk-btn.active { border-color: var(--blue-600); color: #fff; background: var(--blue-600); box-shadow: 0 7px 14px rgba(23,105,224,.18); }
+.isk-custom { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #edf2f7; }
+.isk-custom span { color: var(--ink-500); font-size: 12px; font-weight: 700; }
+.isk-custom input { height: 42px; width: 84px; border-radius: 11px; }
+.basket-wrap { overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: 0 10px 30px rgba(15,42,73,.07); }
+.basket-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.basket-tbl th { padding: 11px 7px; background: var(--navy-900); color: #fff; text-align: center; font-size: 9px; letter-spacing: .05em; }
+.basket-tbl .item-row td { padding: 12px 7px; border-bottom: 1px solid #edf2f7; background: #fff; color: var(--ink-900); text-align: center; }
+.basket-tbl .item-row:nth-child(even) td { background: #f8fbfe; }
+.basket-tbl .iskonto td { padding: 11px 7px; background: #fff8e8; color: #8a6118; text-align: center; }
+.basket-tbl .iskonto-sonrasi td { padding: 11px 7px; background: #edf9f4; color: #14764f; text-align: center; font-weight: 800; }
+.basket-tbl .kdv-dahil td { padding: 14px 7px; background: linear-gradient(135deg, var(--navy-900), var(--navy-800)); color: #fff; text-align: center; font-size: 14px; font-weight: 900; }
+.empty-basket { padding: 44px 18px; color: var(--ink-500); text-align: center; font-size: 13px; line-height: 1.5; }
+.del-btn { border: 0; background: transparent; color: var(--red-500); cursor: pointer; font-size: 18px; }
+.clear-btn {
+  width: 100%; margin-top: 10px; padding: 12px;
+  border: 1px solid #f0ccd0; border-radius: 13px;
+  background: #fff7f7; color: var(--red-500);
+  cursor: pointer; font-size: 12px; font-weight: 900;
+}
+.badge { display: inline-grid; min-width: 19px; height: 19px; place-items: center; margin-left: 5px; padding: 0 5px; border-radius: 999px; background: var(--amber-400); color: var(--navy-950); font-size: 10px; }
+.overlay { display: none; position: fixed; inset: 0; z-index: 999; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px; background: rgba(4,12,24,.92); backdrop-filter: blur(12px); }
 .overlay.active { display: flex; }
-.video-wrap { position: relative; }
-#video { width: 300px; height: 220px; border-radius: 10px; object-fit: cover; display: block; }
-.frame { position: absolute; top: 0; left: 0; width: 300px; height: 220px; border: 2px solid #4CAF50; border-radius: 10px; pointer-events: none; }
-.overlay-hint { color: rgba(255,255,255,0.75); font-size: 13px; }
-.close-btn { color: #fff; font-size: 14px; cursor: pointer; padding: 10px 24px; border: 1px solid rgba(255,255,255,0.4); border-radius: 24px; background: transparent; }
+.video-wrap { position: relative; overflow: hidden; width: min(100%, 360px); border-radius: 22px; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+#video { display: block; width: 100%; height: 260px; object-fit: cover; }
+.frame { position: absolute; inset: 18px; border: 2px solid #55e6a6; border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,.2); pointer-events: none; }
+.overlay-hint { color: rgba(255,255,255,.76); font-size: 12px; }
+.close-btn { padding: 11px 24px; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+@media (max-width: 560px) {
+  body { padding: 12px 10px 36px; }
+  .header { padding: 20px 18px; border-radius: 20px; }
+  .topbar { gap: 10px; }
+  .header h1 { font-size: 19px; }
+  .header p { font-size: 10px; }
+  .header-side { margin-left: 0; }
+  .magmaweld-logo { width: 132px; max-width: 34vw; }
+  .sync-pill { display: none; }
+  .card, .iskonto-sec { padding: 17px; border-radius: 18px; }
+  .shortcut-hint { display: none; }
+  .action-card { grid-template-columns: 96px 1fr; }
+  .iskonto-btns { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .isk-btn { padding-inline: 3px; }
+  .basket-wrap { overflow-x: auto; }
+  .basket-tbl { min-width: 510px; }
+}
 </style>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
@@ -79,72 +257,100 @@ input[type=text]:focus, input[type=number]:focus { border-color: #1F4E79; }
 </head>
 <body>
 <div class="app">
-  <div class="header">
-    <h1>📦 Teknikel Envanter</h1>
-    <p>Barkod veya ürün adı ile sorgulama</p>
-  </div>
-
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('sorgu')">🔍 Sorgulama</button>
-    <button class="tab inactive" onclick="showTab('sepet')" id="sepetTab">🛒 Sepet</button>
-  </div>
-
-  <div id="tab-sorgu">
-    <div class="card">
-      <div class="label">BARKOD / ÜRÜN ADI</div>
-      <div class="input-row">
-        <input type="text" id="searchInput" placeholder="Girin veya kamerayla okutun..." autocomplete="off" />
-        <button class="scan-btn" id="scanBtn">📷</button>
+  <header class="header">
+    <div class="topbar">
+      <div class="brand-copy">
+        <span class="eyebrow">TEKNİKEL KAYNAK EKİPMANLARI</span>
+        <h1>Akıllı Envanter</h1>
+        <p>Ürün, fiyat ve teklif hesabı tek ekranda.</p>
       </div>
-      <div id="suggestions" class="suggestions"></div>
-    </div>
-
-    <table class="res-table">
-      <thead><tr><th>ÜRÜN ADI</th><th>FİYAT</th><th>DURUM</th></tr></thead>
-      <tbody><tr>
-        <td id="resName" style="font-weight:bold;color:#1a1a1a;background:#f5f5f5">—</td>
-        <td id="resPrice" style="font-weight:bold;color:#1F4E79;font-size:16px;background:#E2EFDA">—</td>
-        <td id="resStatus" style="color:#888;background:#f5f5f5">Bekliyor...</td>
-      </tr></tbody>
-    </table>
-
-    <div class="update-row">
-      <div class="update-label">SON GÜNCELLEME</div>
-      <div class="update-val" id="resDate">—</div>
-    </div>
-
-    <div class="qty-row">
-      <label>Adet:</label>
-      <input type="number" id="qtyInput" value="1" min="1" max="9999" />
-    </div>
-
-    <button class="add-btn" id="addBtn" disabled onclick="addToBasket()">➕ Sepete Ekle</button>
-    <p class="info" id="infoBox">Veriler yükleniyor...</p>
-  </div>
-
-  <div id="tab-sepet" style="display:none">
-    <div class="iskonto-sec">
-      <div class="label">İSKONTO ORANI</div>
-      <div class="iskonto-btns">
-        <button class="isk-btn active" onclick="setIskonto(0, this)">%0</button>
-        <button class="isk-btn" onclick="setIskonto(5, this)">%5</button>
-        <button class="isk-btn" onclick="setIskonto(10, this)">%10</button>
-        <button class="isk-btn" onclick="setIskonto(15, this)">%15</button>
-        <button class="isk-btn" onclick="setIskonto(20, this)">%20</button>
-        <button class="isk-btn" onclick="setIskonto(25, this)">%25</button>
-        <button class="isk-btn" onclick="setIskonto(30, this)">%30</button>
-      </div>
-      <div class="isk-custom">
-        <span>Özel:</span>
-        <input type="number" id="iskontoCustom" min="0" max="100" placeholder="0" oninput="setIskontoCustom(this.value)" />
-        <span>%</span>
+      <div class="header-side">
+        <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld">
+        <div class="sync-pill"><span></span> Canlı veri</div>
       </div>
     </div>
-    <div class="basket-wrap" id="basketWrap">
-      <div class="empty-basket">Sepet boş<br><span style="font-size:11px">Sorgulama sayfasından ürün ekleyin</span></div>
+  </header>
+
+  <nav class="tabs" aria-label="Ana bölümler">
+    <button class="tab active" onclick="showTab('sorgu')">⌕ &nbsp;Sorgulama</button>
+    <button class="tab inactive" onclick="showTab('sepet')" id="sepetTab">🛒 &nbsp;Sepet</button>
+  </nav>
+
+  <main>
+    <div id="tab-sorgu">
+      <section class="card search-card">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">ÜRÜN BUL</span>
+            <h2>Stok ve fiyat sorgula</h2>
+          </div>
+          <span class="shortcut-hint">Barkod veya ürün adı</span>
+        </div>
+        <label class="field-label" for="searchInput">ARAMA</label>
+        <div class="input-row">
+          <input type="text" id="searchInput" placeholder="Ürün adı veya barkod girin..." autocomplete="off" />
+          <button class="scan-btn" id="scanBtn" aria-label="Kamerayla barkod okut">▣</button>
+        </div>
+        <div id="suggestions" class="suggestions"></div>
+      </section>
+
+      <section class="result-panel" aria-label="Ürün sonucu">
+        <div class="result-panel__head">
+          <strong>Ürün sonucu</strong>
+          <span>GÜNCEL KAYIT</span>
+        </div>
+        <table class="res-table">
+          <thead><tr><th>ÜRÜN ADI</th><th>FİYAT</th><th>DURUM</th></tr></thead>
+          <tbody><tr>
+            <td id="resName" style="font-weight:bold;color:#1a1a1a;background:#f5f5f5">—</td>
+            <td id="resPrice" style="font-weight:bold;color:#1F4E79;font-size:16px;background:#E2EFDA">—</td>
+            <td id="resStatus" style="color:#888;background:#f5f5f5">Bekliyor...</td>
+          </tr></tbody>
+        </table>
+        <div class="update-row">
+          <div class="update-label">SON GÜNCELLEME</div>
+          <div class="update-val" id="resDate">—</div>
+        </div>
+      </section>
+
+      <section class="card action-card">
+        <div class="qty-row">
+          <label for="qtyInput">ADET</label>
+          <input type="number" id="qtyInput" value="1" min="1" max="9999" />
+        </div>
+        <button class="add-btn" id="addBtn" disabled onclick="addToBasket()">Sepete ekle&nbsp; →</button>
+        <p class="info" id="infoBox">Veriler yükleniyor...</p>
+      </section>
     </div>
-    <button class="clear-btn" onclick="clearBasket()">🗑️ Sepeti Temizle</button>
-  </div>
+
+    <div id="tab-sepet" style="display:none">
+      <div class="basket-intro">
+        <h2>Teklif sepeti</h2>
+        <p>Ürünleri, iskontoyu ve KDV dahil toplamı kontrol edin.</p>
+      </div>
+      <section class="iskonto-sec">
+        <div class="label">İSKONTO ORANI</div>
+        <div class="iskonto-btns">
+          <button class="isk-btn active" onclick="setIskonto(0, this)">%0</button>
+          <button class="isk-btn" onclick="setIskonto(5, this)">%5</button>
+          <button class="isk-btn" onclick="setIskonto(10, this)">%10</button>
+          <button class="isk-btn" onclick="setIskonto(15, this)">%15</button>
+          <button class="isk-btn" onclick="setIskonto(20, this)">%20</button>
+          <button class="isk-btn" onclick="setIskonto(25, this)">%25</button>
+          <button class="isk-btn" onclick="setIskonto(30, this)">%30</button>
+        </div>
+        <div class="isk-custom">
+          <span>Özel oran</span>
+          <input type="number" id="iskontoCustom" min="0" max="100" placeholder="0" oninput="setIskontoCustom(this.value)" />
+          <span>%</span>
+        </div>
+      </section>
+      <div class="basket-wrap" id="basketWrap">
+        <div class="empty-basket">Sepetiniz henüz boş<br><span style="font-size:11px">Sorgulama ekranından ürün ekleyebilirsiniz</span></div>
+      </div>
+      <button class="clear-btn" onclick="clearBasket()">Sepeti temizle</button>
+    </div>
+  </main>
 </div>
 
 <div class="overlay" id="overlay">
@@ -458,4 +664,3 @@ loadData();
 </script>
 </body>
 </html>
-
