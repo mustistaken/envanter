@@ -319,6 +319,27 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
     </div>
   </header>
 
+  <section class="rates-card" aria-label="Güncel döviz kurları">
+    <div class="rates-head">
+      <div class="rates-title">PİYASA KURLARI</div>
+      <div class="rates-date" id="ratesDate">Güncelleniyor...</div>
+    </div>
+    <div class="rate-item">
+      <div class="rate-icon">$</div>
+      <div class="rate-copy">
+        <span class="rate-name">DOLAR / TL</span>
+        <strong class="rate-value loading" id="usdRate">Yükleniyor...</strong>
+      </div>
+    </div>
+    <div class="rate-item">
+      <div class="rate-icon">€</div>
+      <div class="rate-copy">
+        <span class="rate-name">EURO / TL</span>
+        <strong class="rate-value loading" id="eurRate">Yükleniyor...</strong>
+      </div>
+    </div>
+  </section>
+
   <nav class="tabs" aria-label="Ana bölümler">
     <button class="tab active" onclick="showTab('sorgu')">⌕ &nbsp;Sorgulama</button>
     <button class="tab inactive" onclick="showTab('sepet')" id="sepetTab">🛒 &nbsp;Sepet</button>
@@ -326,27 +347,6 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
 
   <main>
     <div id="tab-sorgu">
-      <section class="rates-card" aria-label="Güncel döviz kurları">
-        <div class="rates-head">
-          <div class="rates-title">PİYASA KURLARI</div>
-          <div class="rates-date" id="ratesDate">Güncelleniyor...</div>
-        </div>
-        <div class="rate-item">
-          <div class="rate-icon">$</div>
-          <div class="rate-copy">
-            <span class="rate-name">DOLAR / TL</span>
-            <strong class="rate-value loading" id="usdRate">Yükleniyor...</strong>
-          </div>
-        </div>
-        <div class="rate-item">
-          <div class="rate-icon">€</div>
-          <div class="rate-copy">
-            <span class="rate-name">EURO / TL</span>
-            <strong class="rate-value loading" id="eurRate">Yükleniyor...</strong>
-          </div>
-        </div>
-      </section>
-
       <section class="card search-card">
         <div class="section-heading">
           <div>
