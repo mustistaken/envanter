@@ -89,6 +89,8 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .magmaweld-logo {
   display: block;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
   width: 190px;
   max-width: 28vw;
   height: auto;
@@ -265,7 +267,7 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
         <p>Ürün, fiyat ve teklif hesabı tek ekranda.</p>
       </div>
       <div class="header-side">
-        <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld">
+        <img class="magmaweld-logo" id="reloadLogo" src="magmaweld-logo.png" alt="Magmaweld — sayfayı yenile" role="button" tabindex="0" title="Sayfayı yenile">
         <div class="sync-pill"><span></span> Canlı veri</div>
       </div>
     </div>
@@ -624,6 +626,18 @@ function showTab(tab) {
 }
 
 document.getElementById('searchInput').addEventListener('input', function(e){ search(e.target.value); });
+
+function reloadPage() {
+  window.location.reload();
+}
+
+document.getElementById('reloadLogo').addEventListener('click', reloadPage);
+document.getElementById('reloadLogo').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    reloadPage();
+  }
+});
 
 var reader = null;
 var scanLocked = false;
