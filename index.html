@@ -626,36 +626,116 @@ function showTab(tab) {
 document.getElementById('searchInput').addEventListener('input', function(e){ search(e.target.value); });
 
 var reader = null;
-document.getElementById('scanBtn').addEventListener('click', async function() {
+var scanLocked = false;
+
+function improveCameraFocus() {
+  var video = document.getElementById('video');
+  var stream = video.srcObject;
+  if (!stream || !stream.getVideoTracks) return;
+
+  var track = stream.getVideoTracks()[0];
+  if (!track || !track.getCapabilities || !track.applyConstraints) return;
+
+  try {
+    var caps = track.getCapabilities();
+    var advanced = {};
+
+    if (caps.focusMode && caps.focusMode.indexOf('continuous') !== -1) {
+      advanced.focusMode = 'continuous';
+    }
+    if (caps.zoom && typeof caps.zoom.min === 'number') {
+      var targetZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 1.5));
+      advanced.zoom = targetZoom;
+    }
+
+    if (Object.keys(advanced).length) {
+      track.applyConstraints({ advanced: [advanced] }).catch(function(){});
+    }
+  } catch(e) {
+    console.warn('Kamera odağı ayarlanamadı:', e);
+  }
+}
+
+document.getElementById('scanBtn').addEventListener('click', function() {
+  if (reader) return;
+
+  scanLocked = false;
   document.getElementById('overlay').classList.add('active');
+  document.querySelector('.overlay-hint').textContent =
+    'Barkodu yatay tutun ve çerçeveyi çizgilere yaklaştırın';
+
   try {
     var hints = new Map();
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.EAN_8,  ZXing.BarcodeFormat.UPC_A,
-      ZXing.BarcodeFormat.UPC_E,  ZXing.BarcodeFormat.ITF,
-      ZXing.BarcodeFormat.CODABAR,ZXing.BarcodeFormat.DATA_MATRIX
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.ITF
     ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    reader = new ZXing.BrowserMultiFormatReader(hints);
-    await reader.decodeFromConstraints(
-      { audio: false, video: { facingMode: 'environment', width:{ideal:1920}, height:{ideal:1080} } },
+
+    reader = new ZXing.BrowserMultiFormatReader(hints, 150);
+    reader.decodeFromConstraints(
+      {
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          aspectRatio: { ideal: 1.7777777778 }
+        }
+      },
       'video',
-      function(result) {
-        if (result) {
-          var val = result.getText().trim();
+      function(result, error) {
+        if (result && !scanLocked) {
+          scanLocked = true;
+          var val = String(result.getText() || '').replace(/\D/g, '');
+          if (!val) {
+            scanLocked = false;
+            return;
+          }
           document.getElementById('searchInput').value = val;
           search(val);
+          if (navigator.vibrate) navigator.vibrate(100);
           stopCam();
+          return;
+        }
+
+        if (error &&
+            !(error instanceof ZXing.NotFoundException) &&
+            !(error instanceof ZXing.ChecksumException) &&
+            !(error instanceof ZXing.FormatException)) {
+          console.warn('Barkod okuma hatası:', error);
         }
       }
-    );
-  } catch(e) { alert('Kamera açılamadı: ' + e.message); stopCam(); }
+    ).catch(function(e) {
+      alert('Kamera açılamadı: ' + e.message);
+      stopCam();
+    });
+
+    setTimeout(improveCameraFocus, 700);
+  } catch(e) {
+    alert('Barkod okuyucu başlatılamadı: ' + e.message);
+    stopCam();
+  }
 });
 
 function stopCam() {
-  if (reader) { reader.reset(); reader = null; }
+  if (reader) {
+    try { reader.reset(); } catch(e) {}
+    reader = null;
+  }
+
+  var video = document.getElementById('video');
+  if (video.srcObject && video.srcObject.getTracks) {
+    video.srcObject.getTracks().forEach(function(track){ track.stop(); });
+    video.srcObject = null;
+  }
+
+  scanLocked = false;
   document.getElementById('overlay').classList.remove('active');
 }
 document.getElementById('closeBtn').addEventListener('click', stopCam);
