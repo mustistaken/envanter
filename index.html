@@ -6,8 +6,9 @@
 <title>Teknikel Envanter</title>
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="preconnect" href="https://docs.google.com">
+<link rel="dns-prefetch" href="//docs.google.com">
+<link rel="stylesheet" href="styles.css?v=10">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -22,7 +23,7 @@
         <p>Ürün, fiyat ve teklif hesabı tek ekranda.</p>
       </div>
       <div class="header-side">
-        <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld">
+        <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld" width="360" height="74" decoding="async">
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
           <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
@@ -35,13 +36,13 @@
     </div>
   </header>
 
-  <nav class="tabs" aria-label="Ana bölümler">
-    <button class="tab active" onclick="showTab('sorgu')">⌕ &nbsp;Sorgulama</button>
-    <button class="tab inactive" onclick="showTab('sepet')" id="sepetTab">🛒 &nbsp;Sepet</button>
+  <nav class="tabs" aria-label="Ana bölümler" role="tablist">
+    <button class="tab active" id="sorguTab" role="tab" aria-selected="true" aria-controls="tab-sorgu" onclick="showTab('sorgu')">⌕ &nbsp;Sorgulama</button>
+    <button class="tab inactive" role="tab" aria-selected="false" aria-controls="tab-sepet" onclick="showTab('sepet')" id="sepetTab">🛒 &nbsp;Sepet</button>
   </nav>
 
   <main>
-    <div id="tab-sorgu">
+    <div id="tab-sorgu" role="tabpanel" aria-labelledby="sorguTab">
       <section class="card search-card">
         <div class="section-heading">
           <div>
@@ -79,7 +80,7 @@
             <button class="mini-btn" type="button" onclick="clearAdvancedFilters()">Filtreleri temizle</button>
           </div>
         </details>
-        <div id="suggestions" class="suggestions"></div>
+        <div id="suggestions" class="suggestions" aria-live="polite"></div>
       </section>
 
       <section class="card stock-alert-card" id="stockAlertCard">
@@ -148,7 +149,7 @@
       </section>
     </div>
 
-    <div id="tab-sepet" style="display:none">
+    <div id="tab-sepet" role="tabpanel" aria-labelledby="sepetTab" style="display:none">
       <div class="basket-intro">
         <h2>Teklif sepeti</h2>
         <p>Ürünleri, iskontoyu ve KDV dahil toplamı kontrol edin.</p>
@@ -214,7 +215,7 @@
   </main>
 </div>
 
-<div class="modal" id="offerModal" role="dialog" aria-modal="true" aria-labelledby="offerTitle">
+<div class="modal" id="offerModal" role="dialog" aria-modal="true" aria-labelledby="offerTitle" aria-hidden="true">
   <div class="modal-card">
     <div class="modal-head">
       <div>
@@ -250,7 +251,7 @@
   </div>
 </div>
 
-<div class="modal" id="productDetailModal" role="dialog" aria-modal="true" aria-labelledby="productDetailTitle">
+<div class="modal" id="productDetailModal" role="dialog" aria-modal="true" aria-labelledby="productDetailTitle" aria-hidden="true">
   <div class="modal-card detail-modal-card">
     <div class="modal-head">
       <div>
@@ -282,7 +283,7 @@
   </div>
 </div>
 
-<div class="modal" id="adminModal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+<div class="modal" id="adminModal" role="dialog" aria-modal="true" aria-labelledby="adminTitle" aria-hidden="true">
   <div class="modal-card">
     <div class="modal-head">
       <div>
@@ -312,7 +313,7 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<div class="overlay" id="overlay">
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Barkod okuyucu" aria-hidden="true">
   <div class="video-wrap">
     <video id="video" autoplay playsinline muted></video>
     <div class="frame"></div>
@@ -321,6 +322,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
+
