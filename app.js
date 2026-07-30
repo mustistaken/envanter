@@ -1,4 +1,9 @@
-const SHEET_ID = '18hZzuWA2BKES85qMrFylNsDawM81QKWTJF84xJAlM4U';
+const GOOGLE_CLIENT_ID = '334267311865-5oqahpjifptf1j67httml63h0gvq0g38.apps.googleusercontent.com';
+const ALLOWED_EMAIL = 'mustafaozllu@gmail.com';
+const INVENTORY_API_URL = 'https://script.google.com/macros/s/AKfycbxyCdJ0btfjuZgGF5X0Up7ugD2qEMr-jQHVKtPp-MI466roWtnDb0hPweI71iknVOXBvA/exec';
+const AUTH_TOKEN_KEY = 'teknikelGoogleIdToken';
+let googleIdToken = '';
+let authInitialized = false;
 
 let products = [], currentProduct = null, iskontoOrani = 0;
 let basket = readStore('teknikelCurrentBasket', []);
@@ -16,6 +21,121 @@ let barcodeLibraryPromise = null;
 let lastModalTrigger = null;
 
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
+
+function readSession(key) {
+  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
+}
+
+function writeSession(key, value) {
+  try {
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
+  } catch (e) {}
+}
+
+function decodeGoogleCredential(token) {
+  try {
+    var payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    payload += '='.repeat((4 - payload.length % 4) % 4);
+    return JSON.parse(decodeURIComponent(Array.from(atob(payload)).map(function(char) {
+      return '%' + ('00' + char.charCodeAt(0).toString(16)).slice(-2);
+    }).join('')));
+  } catch (e) {
+    return null;
+  }
+}
+
+function isUsableCredential(token) {
+  var payload = decodeGoogleCredential(token);
+  return !!(payload &&
+    String(payload.aud || '') === GOOGLE_CLIENT_ID &&
+    String(payload.email || '').toLowerCase() === ALLOWED_EMAIL &&
+    Number(payload.exp || 0) * 1000 > Date.now() + 30000);
+}
+
+function setAuthStatus(message, isError) {
+  var status = document.getElementById('authStatus');
+  status.textContent = message;
+  status.classList.toggle('error', !!isError);
+}
+
+function showAuthGate(message, isError) {
+  googleIdToken = '';
+  writeSession(AUTH_TOKEN_KEY, '');
+  products = [];
+  try {
+    localStorage.removeItem('teknikelCachedProducts');
+    localStorage.removeItem('teknikelCacheTime');
+  } catch (e) {}
+  document.body.classList.add('auth-pending');
+  document.getElementById('appShell').setAttribute('aria-hidden', 'true');
+  document.getElementById('authGate').removeAttribute('aria-hidden');
+  setAuthStatus(message || 'Yetkili Google hesabınızla giriş yapın.', isError);
+}
+
+function unlockApp(token) {
+  var payload = decodeGoogleCredential(token);
+  googleIdToken = token;
+  writeSession(AUTH_TOKEN_KEY, token);
+  document.body.classList.remove('auth-pending');
+  document.getElementById('authGate').setAttribute('aria-hidden', 'true');
+  document.getElementById('appShell').setAttribute('aria-hidden', 'false');
+  document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : ALLOWED_EMAIL;
+  loadData();
+}
+
+function handleGoogleCredential(response) {
+  var token = response && response.credential ? response.credential : '';
+  if (!isUsableCredential(token)) {
+    showAuthGate('Bu Google hesabının envantere erişim izni yok.', true);
+    if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+    return;
+  }
+  setAuthStatus('Hesabınız doğrulandı. Envanter açılıyor…', false);
+  unlockApp(token);
+}
+
+function renderGoogleSignIn() {
+  if (authInitialized || !window.google || !google.accounts || !google.accounts.id) return false;
+  authInitialized = true;
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: false
+  });
+  google.accounts.id.renderButton(document.getElementById('googleSignInButton'), {
+    type: 'standard',
+    theme: 'outline',
+    size: 'large',
+    text: 'signin_with',
+    shape: 'rectangular',
+    width: 300,
+    locale: 'tr'
+  });
+  return true;
+}
+
+function initializeAuth() {
+  var attempts = 0;
+  var timer = setInterval(function() {
+    attempts++;
+    if (renderGoogleSignIn()) {
+      clearInterval(timer);
+      var storedToken = readSession(AUTH_TOKEN_KEY);
+      if (isUsableCredential(storedToken)) unlockApp(storedToken);
+      else showAuthGate('Yetkili Google hesabınızla giriş yapın.', false);
+    } else if (attempts >= 80) {
+      clearInterval(timer);
+      showAuthGate('Google giriş sistemi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.', true);
+    }
+  }, 100);
+}
+
+function signOut() {
+  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+  showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
+}
 
 function readStore(key, fallback) {
   try {
@@ -224,30 +344,38 @@ function removeRetiredDemoData() {
 
 removeRetiredDemoData();
 
-async function fetchSheet(cfg) {
-  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    const match = text.match(/setResponse\(([\s\S]*?)\);/);
-    if (!match) throw new Error('Geçersiz Google Sheets yanıtı');
-    const json = JSON.parse(match[1]);
-    return json.table.rows
-      .filter(r => r.c && r.c[cfg.n] && r.c[cfg.n].v)
-      .map(r => ({
-        barcode: r.c[cfg.b] ? (function(v){ var n=Number(v); return (!isNaN(n)&&isFinite(n)) ? String(Math.round(n)) : String(v).trim(); })(r.c[cfg.b].v) : '',
-        name:    String(r.c[cfg.n].v || ''),
-        price:   r.c[cfg.p] ? r.c[cfg.p].v : null,
-        updated: cfg.u !== null && r.c[cfg.u] ? r.c[cfg.u].v : null,
-        stock:   cfg.s !== null && r.c[cfg.s] ? Number(r.c[cfg.s].v) : null,
-        sheet:   cfg.name
-      }));
-  } catch(e) {
-    console.warn(cfg.name + ' yüklenemedi:', e);
-    return null;
-  }
+function mapSecureSheet(cfg, rows) {
+  if (!Array.isArray(rows)) return null;
+  return rows.slice(1)
+    .filter(function(row){ return row && row[cfg.n] !== undefined && String(row[cfg.n]).trim(); })
+    .map(function(row) {
+      var barcodeValue = row[cfg.b];
+      var barcodeNumber = Number(barcodeValue);
+      return {
+        barcode: barcodeValue === null || barcodeValue === undefined ? '' :
+          ((!isNaN(barcodeNumber) && isFinite(barcodeNumber)) ? String(Math.round(barcodeNumber)) : String(barcodeValue).trim()),
+        name: String(row[cfg.n] || ''),
+        price: row[cfg.p] === undefined || row[cfg.p] === '' ? null : row[cfg.p],
+        updated: cfg.u !== null && row[cfg.u] !== undefined ? row[cfg.u] : null,
+        stock: cfg.s !== null && row[cfg.s] !== undefined && row[cfg.s] !== '' ? Number(row[cfg.s]) : null,
+        sheet: cfg.name
+      };
+    });
+}
+
+async function fetchSecureInventory() {
+  if (!isUsableCredential(googleIdToken)) throw new Error('Oturum süresi doldu.');
+  const response = await fetch(INVENTORY_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    body: JSON.stringify({ idToken: googleIdToken }),
+    cache: 'no-store',
+    redirect: 'follow'
+  });
+  if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
+  const payload = await response.json();
+  if (!payload || !payload.ok || !payload.sheets) throw new Error(payload && payload.error ? payload.error : 'Yetkilendirme başarısız.');
+  return SHEETS.map(function(cfg){ return mapSecureSheet(cfg, payload.sheets[cfg.name]); });
 }
 
 function setLastSync(value, cached) {
@@ -267,14 +395,12 @@ async function loadData(manual) {
   refreshBtn.textContent = '↻ Yenileniyor';
   document.getElementById('infoBox').innerHTML = '<span class="skeleton-line"></span>';
   try {
-    const results = await Promise.all(SHEETS.map(fetchSheet));
+    const results = await fetchSecureInventory();
     const failedCount = results.filter(function(result){ return result === null; }).length;
     products = results.filter(Array.isArray).flat();
     if (!products.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
     applyPriceChanges();
     var syncedAt = new Date().toISOString();
-    writeStore('teknikelCachedProducts', products);
-    writeStore('teknikelCacheTime', syncedAt);
     populateCategories();
     populateBrands();
     renderCriticalStocks();
@@ -284,30 +410,16 @@ async function loadData(manual) {
       (failedCount ? ' ' + failedCount + ' sayfa yüklenemedi.' : '');
     if (manual) showToast('Ürün verileri yenilendi.');
   } catch(e) {
-    products = readStore('teknikelCachedProducts', []).filter(function(item){
-      return !isRetiredDemoProduct(item);
-    });
-    if (products.length) {
-      writeStore('teknikelCachedProducts', products);
-      populateCategories();
-      populateBrands();
-      renderCriticalStocks();
-      renderQuickLists();
-      var cachedAt = readStore('teknikelCacheTime', '');
-      document.getElementById('infoBox').textContent = products.length + ' ürün çevrimdışı önbellekten açıldı' +
-        (cachedAt ? ' · ' + new Date(cachedAt).toLocaleString('tr-TR') : '');
-      setLastSync(cachedAt, true);
-      showToast('İnternet yok; son kaydedilen ürün listesi kullanılıyor.');
-    } else {
-      products = [];
-      writeStore('teknikelCachedProducts', products);
-      populateCategories();
-      populateBrands();
-      renderCriticalStocks();
-      renderQuickLists();
-      document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı. Google Sheets erişimini kontrol edin.';
-      setLastSync('', false);
-      showToast('Ürün verisi alınamadı; demo ürün gösterilmiyor.');
+    products = [];
+    populateCategories();
+    populateBrands();
+    renderCriticalStocks();
+    renderQuickLists();
+    document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
+    setLastSync('', false);
+    showToast('Güvenli ürün verisi alınamadı.');
+    if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(e.message || ''))) {
+      showAuthGate(e.message + ' Lütfen yeniden giriş yapın.', true);
     }
   } finally {
     isLoadingData = false;
@@ -1219,7 +1331,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=12').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=13').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -1230,4 +1342,4 @@ renderSavedBaskets();
 renderOfferHistory();
 renderQuickLists();
 renderCustomerProfiles();
-loadData();
+initializeAuth();
