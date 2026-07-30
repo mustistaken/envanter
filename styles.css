@@ -16,6 +16,105 @@
   --line: #dce5f0;
   --shadow: 0 20px 60px rgba(10, 31, 57, .12);
 }
+
+body.auth-pending {
+  overflow: hidden;
+  padding: 0;
+}
+
+body.auth-pending .app {
+  display: none;
+}
+
+.auth-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(46, 125, 181, .18), transparent 34%),
+    radial-gradient(circle at 85% 80%, rgba(83, 221, 162, .12), transparent 30%),
+    #f4f7fb;
+}
+
+.auth-gate[aria-hidden="true"] {
+  display: none;
+}
+
+.auth-card {
+  width: min(100%, 460px);
+  padding: 42px;
+  border: 1px solid rgba(31, 78, 121, .12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 28px 70px rgba(31, 78, 121, .16);
+  text-align: center;
+}
+
+.auth-card img {
+  width: min(100%, 300px);
+  height: auto;
+  margin: 0 auto 30px;
+}
+
+.auth-card h1 {
+  margin: 8px 0 12px;
+  color: #173d5f;
+  font-size: clamp(28px, 6vw, 38px);
+}
+
+.auth-card p {
+  margin: 0 auto 24px;
+  max-width: 360px;
+  color: #607286;
+  line-height: 1.65;
+}
+
+.google-signin {
+  min-height: 44px;
+  display: flex;
+  justify-content: center;
+}
+
+.auth-status {
+  min-height: 24px;
+  margin: 18px 0 0 !important;
+  font-size: 13px;
+}
+
+.auth-status.error {
+  color: #b42318;
+}
+
+.account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .1);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.account-btn:hover {
+  background: rgba(255, 255, 255, .18);
+}
+
+@media (max-width: 560px) {
+  .auth-card {
+    padding: 30px 22px;
+    border-radius: 18px;
+  }
+
+  .account-btn span {
+    display: none;
+  }
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: #edf3f9; }
 body {
@@ -478,4 +577,3 @@ body.dark .tool-btn, body.dark .qty-btn, body.dark .favorite-btn { background: #
   .detail-grid { grid-template-columns: 1fr; }
   .toast { bottom: 88px; }
 }
-
