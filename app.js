@@ -1,5 +1,4 @@
 const GOOGLE_CLIENT_ID = '334267311865-5oqahpjifptf1j67httml63h0gvq0g38.apps.googleusercontent.com';
-const ALLOWED_EMAIL = 'mustafaozllu@gmail.com';
 const INVENTORY_API_URL = 'https://script.google.com/macros/s/AKfycbxyCdJ0btfjuZgGF5X0Up7ugD2qEMr-jQHVKtPp-MI466roWtnDb0hPweI71iknVOXBvA/exec';
 const AUTH_TOKEN_KEY = 'teknikelGoogleIdToken';
 let googleIdToken = '';
@@ -49,7 +48,7 @@ function isUsableCredential(token) {
   var payload = decodeGoogleCredential(token);
   return !!(payload &&
     String(payload.aud || '') === GOOGLE_CLIENT_ID &&
-    String(payload.email || '').toLowerCase() === ALLOWED_EMAIL &&
+    (payload.email_verified === true || payload.email_verified === 'true') &&
     Number(payload.exp || 0) * 1000 > Date.now() + 30000);
 }
 
@@ -80,7 +79,7 @@ function unlockApp(token) {
   document.body.classList.remove('auth-pending');
   document.getElementById('authGate').setAttribute('aria-hidden', 'true');
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
-  document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : ALLOWED_EMAIL;
+  document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
   loadData();
 }
 
@@ -1331,7 +1330,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=13.2').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=13.3').catch(function(){}); });
 }
 
 updateConnectionState();
