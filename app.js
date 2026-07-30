@@ -346,7 +346,7 @@ removeRetiredDemoData();
 
 function mapSecureSheet(cfg, rows) {
   if (!Array.isArray(rows)) return null;
-  return rows.slice(1)
+  return rows.slice(2)
     .filter(function(row){ return row && row[cfg.n] !== undefined && String(row[cfg.n]).trim(); })
     .map(function(row) {
       var barcodeValue = row[cfg.b];
@@ -1331,7 +1331,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=13.1').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=13.2').catch(function(){}); });
 }
 
 updateConnectionState();
