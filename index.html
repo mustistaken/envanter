@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -6,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teknikel Envanter</title>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -22,8 +21,14 @@
       </div>
       <div class="header-side">
         <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld">
-        <div class="sync-pill"><span></span> Canlı veri</div>
-        <button class="install-btn" id="installBtn">Uygulamayı yükle</button>
+        <div class="header-tools">
+          <div class="sync-pill"><span></span> Canlı veri</div>
+          <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
+          <button class="icon-tool-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Koyu temayı aç">☾</button>
+          <button class="icon-tool-btn" onclick="openAdminModal()" aria-label="Yönetim merkezini aç">⚙</button>
+          <button class="install-btn" id="installBtn">Uygulamayı yükle</button>
+        </div>
+        <span class="last-sync" id="lastSyncText">Son veri kontrolü bekleniyor</span>
       </div>
     </div>
   </header>
@@ -52,9 +57,40 @@
           <select class="category-select" id="categoryFilter" aria-label="Ürün kategorisi">
             <option value="">Tüm kategoriler</option>
           </select>
+          <select class="category-select" id="brandFilter" aria-label="Marka">
+            <option value="">Tüm markalar</option>
+          </select>
           <span class="filter-note">Akıllı eşleşme açık</span>
         </div>
+        <details class="advanced-filter">
+          <summary>Gelişmiş filtreler</summary>
+          <div class="advanced-filter-grid">
+            <select class="category-select" id="stockFilter" aria-label="Stok durumu">
+              <option value="">Tüm stok durumları</option>
+              <option value="available">Stokta olanlar</option>
+              <option value="critical">Kritik stok</option>
+              <option value="out">Tükenenler</option>
+              <option value="priced">Fiyat listesi</option>
+            </select>
+            <input type="number" id="minPriceFilter" min="0" placeholder="Min. fiyat" aria-label="Minimum fiyat">
+            <input type="number" id="maxPriceFilter" min="0" placeholder="Maks. fiyat" aria-label="Maksimum fiyat">
+            <button class="mini-btn" type="button" onclick="clearAdvancedFilters()">Filtreleri temizle</button>
+          </div>
+        </details>
         <div id="suggestions" class="suggestions"></div>
+      </section>
+
+      <section class="card stock-alert-card" id="stockAlertCard">
+        <div class="quick-head">
+          <div>
+            <span class="section-kicker">STOK TAKİBİ</span>
+            <strong>Kritik stok uyarıları</strong>
+          </div>
+          <span class="critical-count" id="criticalStockCount">Kontrol ediliyor</span>
+        </div>
+        <div class="critical-stock-list" id="criticalStockList">
+          <span class="quick-empty">Stok bilgileri hazırlanıyor.</span>
+        </div>
       </section>
 
       <section class="card quick-card" aria-label="Hızlı erişim">
@@ -70,7 +106,7 @@
       <section class="result-panel" aria-label="Ürün sonucu">
         <div class="result-panel__head">
           <strong>Ürün sonucu</strong>
-          <span>GÜNCEL KAYIT</span>
+          <span id="priceChangeBadge">GÜNCEL KAYIT</span>
         </div>
         <table class="res-table">
           <thead><tr><th>ÜRÜN ADI</th><th>FİYAT</th><th>DURUM</th></tr></thead>
@@ -86,6 +122,7 @@
         </div>
         <div class="result-actions">
           <span class="source-pill" id="resSource">Kaynak seçildiğinde burada görünür</span>
+          <button class="detail-btn" id="detailBtn" onclick="openProductDetail()" disabled>Detay</button>
           <button class="favorite-btn" id="favoriteBtn" onclick="toggleCurrentFavorite()" aria-label="Favorilere ekle">☆</button>
         </div>
       </section>
@@ -152,6 +189,25 @@
           <span class="quick-empty">Kayıtlı sepet bulunmuyor.</span>
         </div>
       </section>
+      <section class="card export-card">
+        <div class="quick-head">
+          <strong>Dışa aktar</strong>
+          <span>Excel ve PDF</span>
+        </div>
+        <div class="export-actions">
+          <button class="tool-btn" onclick="exportBasketCsv()">Sepeti Excel’e aktar</button>
+          <button class="tool-btn" onclick="printOffer()">Teklifi PDF yap</button>
+        </div>
+      </section>
+      <section class="card saved-card">
+        <div class="quick-head">
+          <strong>Teklif geçmişi</strong>
+          <span>Bu cihazda saklanır</span>
+        </div>
+        <div class="saved-list" id="offerHistoryList">
+          <span class="quick-empty">Henüz kaydedilmiş teklif yok.</span>
+        </div>
+      </section>
     </div>
   </main>
 </div>
@@ -161,6 +217,7 @@
     <div class="modal-head">
       <div>
         <h2 id="offerTitle">Teklif oluştur</h2>
+        <span class="offer-number" id="offerNumber">Teklif numarası hazırlanıyor</span>
         <p>Müşteri bilgilerini ekleyin, yazdırın veya WhatsApp’tan paylaşın.</p>
       </div>
       <button class="modal-close" onclick="closeOfferModal()" aria-label="Kapat">×</button>
@@ -168,7 +225,9 @@
     <div class="form-grid">
       <div class="form-field">
         <label for="customerName">MÜŞTERİ / FİRMA</label>
-        <input type="text" id="customerName" placeholder="Örn. ABC Metal">
+        <input type="text" id="customerName" list="customerProfiles" placeholder="Örn. ABC Metal">
+        <datalist id="customerProfiles"></datalist>
+        <button class="profile-save" type="button" onclick="saveCustomerProfile()">Müşteriyi ve iskontoyu kaydet</button>
       </div>
       <div class="form-field">
         <label for="offerValidity">GEÇERLİLİK TARİHİ</label>
@@ -181,10 +240,71 @@
     </div>
     <div class="offer-summary" id="offerSummary">Sepet bilgileri hazırlanıyor...</div>
     <div class="offer-actions">
+      <button class="offer-save" onclick="saveOfferHistory()">Teklifi kaydet</button>
       <button class="offer-print" onclick="printOffer()">Yazdır / PDF</button>
       <button class="offer-whatsapp" onclick="shareOffer()">WhatsApp</button>
       <button class="offer-copy" onclick="copyOffer()">Metni kopyala</button>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="productDetailModal" role="dialog" aria-modal="true" aria-labelledby="productDetailTitle">
+  <div class="modal-card detail-modal-card">
+    <div class="modal-head">
+      <div>
+        <span class="section-kicker">ÜRÜN DETAYI</span>
+        <h2 id="productDetailTitle">Ürün bilgileri</h2>
+        <p id="detailCategory">Kategori bilgisi</p>
+      </div>
+      <button class="modal-close" onclick="closeProductDetail()" aria-label="Kapat">×</button>
+    </div>
+    <div class="detail-price" id="detailPrice">—</div>
+    <div class="detail-grid">
+      <div><span>ÜRÜN KODU</span><strong id="detailBarcode">—</strong></div>
+      <div><span>STOK DURUMU</span><strong id="detailStock">—</strong></div>
+      <div><span>SON GÜNCELLEME</span><strong id="detailUpdated">—</strong></div>
+      <div><span>VERİ KAYNAĞI</span><strong id="detailSource">—</strong></div>
+      <div><span>FİYAT DEĞİŞİMİ</span><strong id="detailPriceChange">İlk kayıt</strong></div>
+    </div>
+    <div class="favorite-group-row">
+      <label for="favoriteGroupInput">FAVORİ GRUBU</label>
+      <input type="text" id="favoriteGroupInput" list="favoriteGroupOptions" placeholder="Örn. Sık kullanılanlar">
+      <datalist id="favoriteGroupOptions">
+        <option value="Sık kullanılanlar"></option>
+        <option value="Kaynak makineleri"></option>
+        <option value="Sarf malzemeleri"></option>
+      </datalist>
+      <button class="tool-btn" onclick="saveFavoriteGroup()">Gruba kaydet</button>
+    </div>
+    <button class="tool-btn primary detail-add" onclick="closeProductDetail(); document.getElementById('addBtn').focus()">Sepete ekleme alanına dön</button>
+  </div>
+</div>
+
+<div class="modal" id="adminModal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <span class="section-kicker">GÜVENLİ YÖNETİM</span>
+        <h2 id="adminTitle">Yönetim merkezi</h2>
+        <p>Ürün düzenleme yetkisi Google hesabınız üzerinden kontrol edilir.</p>
+      </div>
+      <button class="modal-close" onclick="closeAdminModal()" aria-label="Kapat">×</button>
+    </div>
+    <div class="admin-grid">
+      <a class="admin-action primary" href="https://docs.google.com/spreadsheets/d/18hZzuWA2BKES85qMrFylNsDawM81QKWTJF84xJAlM4U/edit" target="_blank" rel="noopener">
+        <strong>Ürün ve stokları düzenle</strong>
+        <span>Yetkili Google Sheets dosyasını açar</span>
+      </a>
+      <button class="admin-action" onclick="exportProductsCsv()">
+        <strong>Tüm ürünleri Excel’e aktar</strong>
+        <span>Güncel ürün listesinin yedeğini indirir</span>
+      </button>
+      <button class="admin-action" onclick="refreshData(); closeAdminModal()">
+        <strong>Verileri şimdi yenile</strong>
+        <span>Google Sheets kayıtlarını tekrar okur</span>
+      </button>
+    </div>
+    <p class="admin-note">Siteye doğrudan şifre eklenmedi. Böylece yönetim parolası açık kaynak kodunda görünmez; düzenleme güvenliği Google hesabınızda kalır.</p>
   </div>
 </div>
 
@@ -199,6 +319,6 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
