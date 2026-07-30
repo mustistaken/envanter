@@ -1,1 +1,19 @@
-{"name": "Teknikel Envanter", "short_name": "Teknikel", "start_url": "/envanter/", "display": "standalone", "background_color": "#1F4E79", "theme_color": "#1F4E79", "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png"}]}
+{
+  "name": "Teknikel Akıllı Envanter",
+  "short_name": "Teknikel",
+  "description": "Ürün, fiyat, sepet ve teklif yönetimi",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#edf3f9",
+  "theme_color": "#12345a",
+  "icons": [
+    {
+      "src": "https://mustistaken.github.io/envanter/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
