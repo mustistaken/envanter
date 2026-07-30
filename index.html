@@ -6,15 +6,26 @@
 <title>Teknikel Envanter</title>
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
-<link rel="preconnect" href="https://docs.google.com">
-<link rel="dns-prefetch" href="//docs.google.com">
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="preconnect" href="https://accounts.google.com">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="stylesheet" href="styles.css?v=13">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
 </head>
-<body>
-<div class="app">
+<body class="auth-pending">
+<section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+  <div class="auth-card">
+    <img src="magmaweld-logo.png" alt="Magmaweld" width="360" height="74">
+    <span class="section-kicker">GÜVENLİ ERİŞİM</span>
+    <h1 id="authTitle">Teknikel Akıllı Envanter</h1>
+    <p>Ürün, stok ve fiyat bilgilerini görüntülemek için yetkili Google hesabınızla giriş yapın.</p>
+    <div id="googleSignInButton" class="google-signin"></div>
+    <p class="auth-status" id="authStatus" role="status">Google giriş sistemi hazırlanıyor…</p>
+  </div>
+</section>
+
+<div class="app" id="appShell" aria-hidden="true">
   <header class="header">
     <div class="topbar">
       <div class="brand-copy">
@@ -29,6 +40,9 @@
           <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
           <button class="icon-tool-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Koyu temayı aç">☾</button>
           <button class="icon-tool-btn" onclick="openAdminModal()" aria-label="Yönetim merkezini aç">⚙</button>
+          <button class="account-btn" id="accountBtn" onclick="signOut()" title="Google oturumunu kapat">
+            <span id="accountEmail">Google hesabı</span> · Çıkış
+          </button>
           <button class="install-btn" id="installBtn">Uygulamayı yükle</button>
         </div>
         <span class="last-sync" id="lastSyncText">Son veri kontrolü bekleniyor</span>
@@ -307,7 +321,7 @@
         <span>Google Sheets kayıtlarını tekrar okur</span>
       </button>
     </div>
-    <p class="admin-note">Siteye doğrudan şifre eklenmedi. Böylece yönetim parolası açık kaynak kodunda görünmez; düzenleme güvenliği Google hesabınızda kalır.</p>
+    <p class="admin-note">Ürün verileri yalnızca yetkili Google hesabı doğrulandıktan sonra güvenli servis üzerinden alınır. Site kodunda parola veya gizli anahtar bulunmaz.</p>
   </div>
 </div>
 
@@ -322,6 +336,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=12"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
