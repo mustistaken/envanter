@@ -97,16 +97,43 @@ const SHEETS = [
   { name: 'Örtülü Elektrodlar',         b:0, n:1, p:4,    u:null },
 ];
 
-const DEMO_PRODUCTS = [
-  { barcode:'869000100001', name:'Magmaweld ID 250 TW Kaynak Makinesi', price:48500, updated:'2026-07-30', sheet:'MW Kaynak Makinaları' },
-  { barcode:'869000100002', name:'Magmaweld ESR 13 Örtülü Elektrod 3.25 mm', price:1890, updated:'2026-07-30', sheet:'Örtülü Elektrodlar' },
-  { barcode:'869000100003', name:'MIG-MAG Kaynak Teli 1.0 mm 15 kg', price:2450, updated:'2026-07-29', sheet:'MIG-MAG ve TIG Telleri' },
-  { barcode:'869000100004', name:'Trafimet Ergoplus 25 Kaynak Torcu', price:6850, updated:'2026-07-28', sheet:'Trafimet' },
-  { barcode:'869000100005', name:'Seramik Nozul No: 6', price:185, updated:'2026-07-30', sheet:'MW Torç ve Sarfları' },
-  { barcode:'869000100006', name:'Kaynakçı Deri Eldiveni', price:420, updated:'2026-07-27', sheet:'Kaynak Tamamlayıcı Ürünler' },
-  { barcode:'869000100007', name:'Özlü Kaynak Teli E71T-1 1.2 mm', price:3250, updated:'2026-07-26', sheet:'Özlü Teller' },
-  { barcode:'869000100008', name:'Otomatik Kararan Kaynak Maskesi', price:3950, updated:'2026-07-30', sheet:'Envanter' }
-];
+const RETIRED_DEMO_BARCODES = new Set([
+  '869000100001', '869000100002', '869000100003', '869000100004',
+  '869000100005', '869000100006', '869000100007', '869000100008'
+]);
+
+const RETIRED_DEMO_KEYS = new Set([
+  'Magmaweld ID 250 TW Kaynak Makinesi|MW Kaynak Makinaları',
+  'Magmaweld ESR 13 Örtülü Elektrod 3.25 mm|Örtülü Elektrodlar',
+  'MIG-MAG Kaynak Teli 1.0 mm 15 kg|MIG-MAG ve TIG Telleri',
+  'Trafimet Ergoplus 25 Kaynak Torcu|Trafimet',
+  'Seramik Nozul No: 6|MW Torç ve Sarfları',
+  'Kaynakçı Deri Eldiveni|Kaynak Tamamlayıcı Ürünler',
+  'Özlü Kaynak Teli E71T-1 1.2 mm|Özlü Teller',
+  'Otomatik Kararan Kaynak Maskesi|Envanter'
+]);
+
+function isRetiredDemoProduct(product) {
+  return product && RETIRED_DEMO_BARCODES.has(String(product.barcode || ''));
+}
+
+function removeRetiredDemoData() {
+  basket = basket.filter(function(item){ return !isRetiredDemoProduct(item); });
+  favorites = favorites.filter(function(key){ return !RETIRED_DEMO_KEYS.has(key); });
+  recentProducts = recentProducts.filter(function(key){ return !RETIRED_DEMO_KEYS.has(key); });
+  savedBaskets = savedBaskets.map(function(record) {
+    return Object.assign({}, record, {
+      items: (record.items || []).filter(function(item){ return !isRetiredDemoProduct(item); })
+    });
+  }).filter(function(record){ return record.items.length; });
+
+  writeStore('teknikelCurrentBasket', basket);
+  writeStore('teknikelFavorites', favorites);
+  writeStore('teknikelRecentProducts', recentProducts);
+  writeStore('teknikelSavedBaskets', savedBaskets);
+}
+
+removeRetiredDemoData();
 
 async function fetchSheet(cfg) {
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
@@ -147,8 +174,11 @@ async function loadData() {
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.' +
       (failedCount ? ' ' + failedCount + ' sayfa yüklenemedi.' : '');
   } catch(e) {
-    products = readStore('teknikelCachedProducts', []);
+    products = readStore('teknikelCachedProducts', []).filter(function(item){
+      return !isRetiredDemoProduct(item);
+    });
     if (products.length) {
+      writeStore('teknikelCachedProducts', products);
       populateCategories();
       renderQuickLists();
       var cachedAt = readStore('teknikelCacheTime', '');
@@ -156,11 +186,12 @@ async function loadData() {
         (cachedAt ? ' · ' + new Date(cachedAt).toLocaleString('tr-TR') : '');
       showToast('İnternet yok; son kaydedilen ürün listesi kullanılıyor.');
     } else {
-      products = DEMO_PRODUCTS.slice();
+      products = [];
+      writeStore('teknikelCachedProducts', products);
       populateCategories();
       renderQuickLists();
-      document.getElementById('infoBox').textContent = 'Önizleme modu: ' + products.length + ' demo ürün yüklendi.';
-      showToast('Gerçek veri kaynağına ulaşılamadı; demo ürünler açıldı.');
+      document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı. Google Sheets erişimini kontrol edin.';
+      showToast('Ürün verisi alınamadı; demo ürün gösterilmiyor.');
     }
   }
 }
@@ -661,7 +692,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=3').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=4').catch(function(){}); });
 }
 
 updateConnectionState();
