@@ -979,7 +979,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.0').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.1').catch(function(){}); });
 }
 
 updateConnectionState();
