@@ -1,9 +1,9 @@
-const CACHE_NAME = 'teknikel-preview-v7';
+const CACHE_NAME = 'teknikel-preview-v8';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css?v=7',
-  './app.js?v=7',
+  './app.js?v=8',
   './manifest.json',
   './magmaweld-logo.png'
 ];
