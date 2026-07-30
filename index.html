@@ -376,7 +376,8 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
 <body>
 <div class="app">
   <header class="header">
-    <di…4085 tokens truncated…urn String(val == null ? '' : val)
+    <di…4082 tokens truncated…al) {
+  return String(val == null ? '' : val)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -744,8 +745,9 @@ function printOffer() {
   win.document.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
     '<style>body{font-family:Arial,sans-serif;color:#142033;padding:40px;line-height:1.6}h1{color:#12345a;margin:0 0 20px}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px}small{color:#718099}</style></head>' +
     '<body><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
-    '<script>window.onload=function(){window.print()}<\/script></body></html>');
+    '</body></html>');
   win.document.close();
+  setTimeout(function(){ win.print(); }, 200);
 }
 
 function updateBadge() {
