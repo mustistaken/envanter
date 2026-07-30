@@ -1,5 +1,5 @@
 
-const SHEET_ID = '1sjSuZf9MufnucsYQbDMnUyanamDdJCpKPmKc0_CvLSU';
+const SHEET_ID = '18hZzuWA2BKES85qMrFylNsDawM81QKWTJF84xJAlM4U';
 
 let products = [], currentProduct = null, iskontoOrani = 0;
 let basket = readStore('teknikelCurrentBasket', []);
@@ -692,7 +692,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=4').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=5').catch(function(){}); });
 }
 
 updateConnectionState();
