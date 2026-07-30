@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=13.3">
+<link rel="stylesheet" href="styles.css?v=14.0">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -38,12 +38,17 @@
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
           <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
-          <button class="icon-tool-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Koyu temayı aç">☾</button>
-          <button class="icon-tool-btn" onclick="openAdminModal()" aria-label="Yönetim merkezini aç">⚙</button>
-          <button class="account-btn" id="accountBtn" onclick="signOut()" title="Google oturumunu kapat">
-            <span id="accountEmail">Google hesabı</span> · Çıkış
-          </button>
-          <button class="install-btn" id="installBtn">Uygulamayı yükle</button>
+          <details class="utility-menu">
+            <summary aria-label="Hesap ve ayarlar">•••</summary>
+            <div class="utility-menu-panel">
+              <button class="utility-action" id="themeBtn" onclick="toggleTheme()">Tema değiştir</button>
+              <button class="utility-action" onclick="openAdminModal()">Yönetim merkezi</button>
+              <button class="utility-action account-btn" id="accountBtn" onclick="signOut()" title="Google oturumunu kapat">
+                <span id="accountEmail">Google hesabı</span> · Çıkış
+              </button>
+              <button class="utility-action install-btn" id="installBtn">Uygulamayı yükle</button>
+            </div>
+          </details>
         </div>
         <span class="last-sync" id="lastSyncText">Son veri kontrolü bekleniyor</span>
       </div>
@@ -54,6 +59,29 @@
     <button class="tab active" id="sorguTab" role="tab" aria-selected="true" aria-controls="tab-sorgu" onclick="showTab('sorgu')">⌕ &nbsp;Sorgulama</button>
     <button class="tab inactive" role="tab" aria-selected="false" aria-controls="tab-sepet" onclick="showTab('sepet')" id="sepetTab">🛒 &nbsp;Sepet</button>
   </nav>
+
+  <section class="overview-grid" aria-label="Envanter özeti">
+    <article class="overview-card overview-card--primary">
+      <span>TOPLAM ÜRÜN</span>
+      <strong id="statProductCount">—</strong>
+      <small>Aktif envanter kaydı</small>
+    </article>
+    <article class="overview-card overview-card--warning">
+      <span>KRİTİK STOK</span>
+      <strong id="statCriticalCount">—</strong>
+      <small>5 adet ve altındaki ürünler</small>
+    </article>
+    <article class="overview-card overview-card--sync">
+      <span>SON SENKRONİZASYON</span>
+      <strong id="statLastSync">Bekleniyor</strong>
+      <small>Güvenli Google verisi</small>
+    </article>
+  </section>
+
+  <button class="mobile-basket-summary" id="mobileBasketSummary" type="button" onclick="showTab('sepet')" aria-label="Sepeti aç">
+    <span><small>SEPET</small><strong id="mobileBasketItems">0 ürün</strong></span>
+    <strong id="mobileBasketTotal">0,00 ₺</strong>
+  </button>
 
   <main>
     <div id="tab-sorgu" role="tabpanel" aria-labelledby="sorguTab">
@@ -136,6 +164,11 @@
         <div class="update-row">
           <div class="update-label">SON GÜNCELLEME</div>
           <div class="update-val" id="resDate">—</div>
+        </div>
+        <div class="result-meta" id="resultMeta" aria-live="polite">
+          <span class="meta-chip" id="resultBrandChip">Marka bekleniyor</span>
+          <span class="meta-chip" id="resultCategoryChip">Kategori bekleniyor</span>
+          <span class="meta-chip meta-chip--neutral" id="resultStockChip">Durum bekleniyor</span>
         </div>
         <div class="result-actions">
           <span class="source-pill" id="resSource">Kaynak seçildiğinde burada görünür</span>
@@ -337,6 +370,7 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=13.3"></script>
+<script src="app.js?v=14.0"></script>
 </body>
 </html>
+
