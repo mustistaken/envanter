@@ -28,10 +28,21 @@ function productKey(product) {
   return product ? (product.name + '|' + product.sheet) : '';
 }
 
+const MAGMAWELD_SHEETS = new Set([
+  'MW Torç ve Sarfları',
+  'MW Kaynak Makinaları',
+  'Özlü Teller',
+  'MIG-MAG ve TIG Telleri',
+  'Örtülü Elektrodlar'
+]);
+
 function getBrand(product) {
-  var name = String(product && product.name || '').trim();
-  var first = name.split(/\s+/)[0] || '';
-  return first.replace(/[,:;]+$/, '');
+  if (!product) return '';
+  var text = normalizeText(product.name);
+  if (product.sheet === 'Trafimet' || text.includes('trafimet')) return 'Trafimet';
+  if (MAGMAWELD_SHEETS.has(product.sheet) || text.includes('magmaweld')) return 'Magmaweld';
+  if (text.includes('inelco')) return 'Inelco';
+  return '';
 }
 
 function normalizeText(value) {
@@ -81,7 +92,7 @@ function setIskonto(val, btn) {
   iskontoOrani = val;
   document.getElementById('iskontoCustom').value = '';
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   renderBasket();
 }
 
@@ -149,11 +160,21 @@ function removeRetiredDemoData() {
       items: (record.items || []).filter(function(item){ return !isRetiredDemoProduct(item); })
     });
   }).filter(function(record){ return record.items.length; });
+  offerHistory = offerHistory.map(function(record) {
+    return Object.assign({}, record, {
+      items: (record.items || []).filter(function(item){ return !isRetiredDemoProduct(item); })
+    });
+  }).filter(function(record){ return record.items.length; });
+  Object.keys(favoriteGroups).forEach(function(key) {
+    if (RETIRED_DEMO_KEYS.has(key)) delete favoriteGroups[key];
+  });
 
   writeStore('teknikelCurrentBasket', basket);
   writeStore('teknikelFavorites', favorites);
   writeStore('teknikelRecentProducts', recentProducts);
   writeStore('teknikelSavedBaskets', savedBaskets);
+  writeStore('teknikelOfferHistory', offerHistory);
+  writeStore('teknikelFavoriteGroups', favoriteGroups);
 }
 
 removeRetiredDemoData();
@@ -269,10 +290,9 @@ function populateBrands() {
   var counts = {};
   products.forEach(function(product) {
     var brand = getBrand(product);
-    if (brand.length > 1) counts[brand] = (counts[brand] || 0) + 1;
+    if (brand) counts[brand] = (counts[brand] || 0) + 1;
   });
-  var brands = Object.keys(counts).filter(function(brand){ return counts[brand] >= 3; })
-    .sort(function(a, b){ return a.localeCompare(b, 'tr'); });
+  var brands = Object.keys(counts).sort(function(a, b){ return a.localeCompare(b, 'tr'); });
   select.innerHTML = '<option value="">Tüm markalar</option>' + brands.map(function(brand) {
     return '<option value="' + escapeHtml(brand) + '">' + escapeHtml(brand) + '</option>';
   }).join('');
@@ -452,6 +472,8 @@ function toggleCurrentFavorite() {
   var key = productKey(currentProduct);
   if (favorites.includes(key)) {
     favorites = favorites.filter(function(item){ return item !== key; });
+    delete favoriteGroups[key];
+    writeStore('teknikelFavoriteGroups', favoriteGroups);
     showToast('Favorilerden çıkarıldı.');
   } else {
     favorites.unshift(key);
@@ -596,13 +618,13 @@ function search(q) {
   var html = '<div class="sug-count">' + (fuzzyUsed ? 'Benzer ' : '') + matches.length + ' eşleşme — seçin:</div>';
   html += matches.slice(0, 30).map(function(p) {
     var idx = products.indexOf(p);
-    return '<div class="sug-item" onclick="selectProduct(' + idx + ')">' +
+    return '<button type="button" class="sug-item" onclick="selectProduct(' + idx + ')">' +
       '<span class="sug-name">' + escapeHtml(p.name) +
         '<br><span class="sug-barcode">' + escapeHtml(p.sheet) +
         (p.barcode ? ' · ' + escapeHtml(p.barcode) : '') + '</span>' +
       '</span>' +
       '<span class="sug-price">' + escapeHtml(formatPrice(p.price)) + '</span>' +
-      '</div>';
+      '</button>';
   }).join('');
   sugEl.innerHTML = html;
 }
@@ -755,9 +777,9 @@ function restoreSavedBasket(id) {
   if (!saved) return;
   basket = saved.items.map(function(item){ return Object.assign({}, item); });
   currentOfferNumber = '';
-  iskontoOrani = Number(saved.discount || 0);
   writeStore('teknikelCurrentBasket', basket);
-  renderBasket(); updateBadge();
+  applyDiscountValue(saved.discount);
+  updateBadge();
   showToast('Kayıtlı sepet açıldı.');
 }
 
@@ -776,12 +798,13 @@ function downloadCsv(filename, rows) {
   var content = '\uFEFF' + rows.map(function(row){ return row.map(csvCell).join(';'); }).join('\r\n');
   var blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
   var link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  var objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
   link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(function(){ URL.revokeObjectURL(link.href); }, 1000);
+  setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, 1000);
 }
 
 function exportProductsCsv() {
@@ -915,9 +938,7 @@ function copySavedOffer(encodedId) {
   var id = decodeURIComponent(encodedId);
   var offer = offerHistory.find(function(item){ return item.id === id; });
   if (!offer) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(offer.text).then(function(){ showToast('Teklif metni kopyalandı.'); });
-  }
+  copyText(offer.text, 'Teklif metni kopyalandı.');
 }
 
 function deleteOfferHistory(encodedId) {
@@ -952,14 +973,34 @@ function updateOfferSummary() {
 }
 
 function copyOffer() {
-  var text = buildOfferText();
+  copyText(buildOfferText(), 'Teklif metni kopyalandı.');
+}
+
+function copyText(text, successMessage) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function(){ showToast('Teklif metni kopyalandı.'); });
+    navigator.clipboard.writeText(text)
+      .then(function(){ showToast(successMessage); })
+      .catch(function(){ copyTextFallback(text, successMessage); });
   } else {
-    var area = document.createElement('textarea');
-    area.value = text; document.body.appendChild(area); area.select(); document.execCommand('copy'); area.remove();
-    showToast('Teklif metni kopyalandı.');
+    copyTextFallback(text, successMessage);
   }
+}
+
+function copyTextFallback(text, successMessage) {
+  var area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  try {
+    document.execCommand('copy');
+    showToast(successMessage);
+  } catch (e) {
+    showToast('Metin kopyalanamadı.');
+  }
+  area.remove();
 }
 
 function shareOffer() {
@@ -1040,6 +1081,13 @@ document.getElementById('productDetailModal').addEventListener('click', function
 document.getElementById('adminModal').addEventListener('click', function(e) {
   if (e.target === this) closeAdminModal();
 });
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  closeOfferModal();
+  closeProductDetail();
+  closeAdminModal();
+  if (document.getElementById('overlay').classList.contains('active')) stopCam();
+});
 
 var reader = null;
 document.getElementById('scanBtn').addEventListener('click', async function() {
@@ -1100,7 +1148,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=8').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=9').catch(function(){}); });
 }
 
 updateConnectionState();
