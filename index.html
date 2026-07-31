@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.4">
+<link rel="stylesheet" href="styles.css?v=14.5">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -38,6 +38,7 @@
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
           <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
+          <button class="add-product-btn" id="addProductBtn" onclick="openAddProductModal()" aria-label="Envantere yeni ürün ekle">＋ Ürün ekle</button>
           <details class="utility-menu">
             <summary aria-label="Hesap ve ayarlar">•••</summary>
             <div class="utility-menu-panel">
@@ -306,6 +307,47 @@
   </div>
 </div>
 
+<div class="modal" id="addProductModal" role="dialog" aria-modal="true" aria-labelledby="addProductTitle" aria-hidden="true">
+  <div class="modal-card add-product-modal-card">
+    <div class="modal-head">
+      <div>
+        <span class="section-kicker">ENVANTERE KAYDET</span>
+        <h2 id="addProductTitle">Yeni ürün ekle</h2>
+        <p>Ürün doğrudan Google Sheets’teki Envanter sayfasına eklenir.</p>
+      </div>
+      <button class="modal-close" type="button" onclick="closeAddProductModal()" aria-label="Kapat">×</button>
+    </div>
+    <form id="addProductForm" onsubmit="submitAddProduct(event)">
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="newProductCode">ÜRÜN KODU</label>
+          <input type="text" id="newProductCode" name="code" maxlength="80" required autocomplete="off" placeholder="Örn. 123456">
+        </div>
+        <div class="form-field">
+          <label for="newProductStock">STOK ADEDİ</label>
+          <input type="number" id="newProductStock" name="stock" min="0" step="1" required inputmode="numeric" placeholder="0">
+        </div>
+        <div class="form-field full">
+          <label for="newProductName">ÜRÜN ADI</label>
+          <input type="text" id="newProductName" name="name" maxlength="250" required autocomplete="off" placeholder="Ürünün tam adını girin">
+        </div>
+        <div class="form-field full">
+          <label for="newProductPrice">FİYAT (₺)</label>
+          <input type="number" id="newProductPrice" name="price" min="0" step="0.01" required inputmode="decimal" placeholder="0,00">
+        </div>
+      </div>
+      <div class="add-product-destination">
+        <span>KAYIT YERİ</span>
+        <strong>envanter › Envanter</strong>
+      </div>
+      <div class="add-product-actions">
+        <button class="product-cancel-btn" type="button" onclick="closeAddProductModal()">Vazgeç</button>
+        <button class="product-save-btn" id="saveProductBtn" type="submit">＋ Ürünü kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="productDetailModal" role="dialog" aria-modal="true" aria-labelledby="productDetailTitle" aria-hidden="true">
   <div class="modal-card detail-modal-card">
     <div class="modal-head">
@@ -378,6 +420,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.4"></script>
+<script src="app.js?v=14.5"></script>
 </body>
 </html>
