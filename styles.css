@@ -562,6 +562,11 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
 .product-cancel-btn { background: #edf2f7; color: var(--ink-700); }
 .product-save-btn { background: linear-gradient(135deg,#128257,var(--green-500)); color: #fff; }
 .product-save-btn:disabled { cursor: wait; opacity: .68; }
+.access-modal-card { width: min(100%, 460px); }
+.access-note {
+  margin-top: 12px; padding: 11px 12px; border-radius: 12px;
+  background: #eef7ff; color: var(--ink-700); font-size: 9px; line-height: 1.55;
+}
 .profile-save {
   justify-self: start; padding: 0; border: 0; background: transparent;
   color: var(--blue-600); cursor: pointer; font-size: 9px; font-weight: 900;
@@ -617,6 +622,7 @@ body.dark .search-card input, body.dark select, body.dark input, body.dark texta
 body.dark .detail-grid div, body.dark .saved-row, body.dark .admin-action { background: #142437; color: var(--ink-900); border-color: #2a4057; }
 body.dark .add-product-destination { background: #142437; border-color: #2a4057; }
 body.dark .product-cancel-btn { background: #1c3045; color: var(--ink-700); }
+body.dark .access-note { background: #142b41; }
 body.dark .res-table th, body.dark .update-row, body.dark .suggestions, body.dark .sug-item,
 body.dark #resName, body.dark #resStatus, body.dark .basket-tbl .item-row td { background: #101d2c !important; color: var(--ink-900) !important; }
 body.dark #resPrice { background: #102b3c !important; }
