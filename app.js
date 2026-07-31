@@ -528,11 +528,12 @@ function refreshData() {
 }
 
 function openAddProductModal() {
-  if (!isUsableCredential(googleIdToken)) {
+  if (!isUsableCredential(googleIdToken) && !isLocalDesignPreview()) {
     showToast('Ürün eklemek için Google hesabınızla yeniden giriş yapın.');
     return;
   }
   document.getElementById('addProductForm').reset();
+  updateAddProductSheetFields();
   openModal('addProductModal');
   requestAnimationFrame(function() {
     document.getElementById('newProductCode').focus();
@@ -541,6 +542,21 @@ function openAddProductModal() {
 
 function closeAddProductModal() {
   closeModal('addProductModal');
+}
+
+function updateAddProductSheetFields() {
+  var sheetName = document.getElementById('newProductSheet').value;
+  var stockInput = document.getElementById('newProductStock');
+  var stockField = document.getElementById('newProductStockField');
+  var hint = document.getElementById('newProductSheetHint');
+  var supportsStock = sheetName === 'Envanter';
+
+  stockInput.disabled = !supportsStock;
+  stockInput.required = supportsStock;
+  stockField.classList.toggle('is-disabled', !supportsStock);
+  hint.textContent = supportsStock
+    ? 'Stok bilgisi Envanter sayfasına kaydedilir.'
+    : 'Bu sayfada stok sütunu yoktur; ürün kodu, adı ve TL fiyatı kaydedilir.';
 }
 
 async function submitAddProduct(event) {
@@ -555,11 +571,14 @@ async function submitAddProduct(event) {
   if (!form.reportValidity()) return;
 
   var saveBtn = document.getElementById('saveProductBtn');
+  var sheetName = document.getElementById('newProductSheet').value;
+  var stockInput = document.getElementById('newProductStock');
   var product = {
     code: document.getElementById('newProductCode').value.trim(),
     name: document.getElementById('newProductName').value.trim(),
     price: Number(document.getElementById('newProductPrice').value),
-    stock: Number(document.getElementById('newProductStock').value)
+    stock: stockInput.disabled ? null : Number(stockInput.value),
+    sheet: sheetName
   };
 
   saveBtn.disabled = true;
@@ -586,15 +605,15 @@ async function submitAddProduct(event) {
     form.reset();
     await loadData(false);
     var added = products.find(function(item) {
-      return item.sheet === 'Envanter' && String(item.barcode) === String(product.code);
+      return item.sheet === sheetName && String(item.barcode) === String(product.code);
     });
     if (added) {
       document.getElementById('searchInput').value = added.name;
       showResult(added);
       addRecentProduct(added);
-      showToast('Ürün Envanter sayfasına eklendi ve liste yenilendi.');
+      showToast('Ürün ' + sheetName + ' sayfasına eklendi ve liste yenilendi.');
     } else {
-      showToast('Ürün Envanter sayfasına eklendi. Listeyi yeniden yenileyin.');
+      showToast('Ürün ' + sheetName + ' sayfasına eklendi. Listeyi yeniden yenileyin.');
     }
   } catch (error) {
     showToast(String(error && error.message || error));
