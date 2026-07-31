@@ -279,6 +279,64 @@ function similarity(a, b) {
   return (2 * hits) / Math.max(1, ap.length + bp.length);
 }
 
+function compactSearchText(value) {
+  return normalizeText(value).replace(/\s+/g, '');
+}
+
+function scoreProductSearch(product, query) {
+  var normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return { score: 1, fuzzy: false };
+
+  var name = normalizeText(product.name);
+  var barcode = normalizeText(product.barcode);
+  var sheet = normalizeText(product.sheet);
+  var haystack = [name, barcode, sheet].filter(Boolean).join(' ');
+  var compactQuery = compactSearchText(normalizedQuery);
+  var compactName = compactSearchText(name);
+  var compactHaystack = compactSearchText(haystack);
+  var queryTokens = normalizedQuery.split(' ').filter(Boolean);
+  var nameWords = name.split(' ').filter(Boolean);
+  var score = 0;
+
+  if (barcode && compactSearchText(barcode) === compactQuery) score = 1200;
+  if (name === normalizedQuery) score = Math.max(score, 1100);
+  if (compactName === compactQuery) score = Math.max(score, 1080);
+  if (name.startsWith(normalizedQuery)) score = Math.max(score, 950);
+  if (nameWords.indexOf(normalizedQuery) !== -1) score = Math.max(score, 930);
+  if (name.includes(normalizedQuery)) score = Math.max(score, 880);
+  if (compactName.includes(compactQuery)) score = Math.max(score, 850);
+
+  var everyTokenMatches = queryTokens.every(function(token) {
+    return haystack.includes(token) || compactHaystack.includes(compactSearchText(token));
+  });
+  if (everyTokenMatches) {
+    var nameTokenHits = queryTokens.filter(function(token) {
+      return name.includes(token) || compactName.includes(compactSearchText(token));
+    }).length;
+    score = Math.max(score, 700 + (nameTokenHits * 25) - Math.min(80, name.length - normalizedQuery.length));
+  }
+
+  if (score > 0) return { score: score, fuzzy: false };
+  if (normalizedQuery.length < 4) return { score: 0, fuzzy: false };
+
+  var wholeScore = Math.max(similarity(normalizedQuery, name), similarity(compactQuery, compactName));
+  var tokenScores = queryTokens.map(function(token) {
+    return Math.max.apply(null, nameWords.map(function(word) {
+      return Math.max(similarity(token, word), similarity(compactSearchText(token), compactSearchText(word)));
+    }).concat([0]));
+  });
+  var tokenAverage = tokenScores.length
+    ? tokenScores.reduce(function(total, value){ return total + value; }, 0) / tokenScores.length
+    : 0;
+  var weakestToken = tokenScores.length ? Math.min.apply(null, tokenScores) : 0;
+  var fuzzyScore = Math.max(wholeScore, tokenAverage);
+
+  if (fuzzyScore >= .56 && (queryTokens.length === 1 || weakestToken >= .42)) {
+    return { score: 300 + Math.round(fuzzyScore * 100), fuzzy: true };
+  }
+  return { score: 0, fuzzy: false };
+}
+
 function showToast(message) {
   var toast = document.getElementById('toast');
   toast.textContent = message;
@@ -959,25 +1017,18 @@ function search(q) {
   var exact = q ? pool.find(function(p){ return p.barcode === q; }) : null;
   if (exact) { showResult(exact); addRecentProduct(exact); sugEl.innerHTML = ''; return; }
 
-  var ql = normalizeText(q);
-  var tokens = ql.split(' ').filter(Boolean);
-  var matches = pool.filter(function(p) {
-    var haystack = normalizeText(p.name + ' ' + p.barcode + ' ' + p.sheet);
-    return tokens.every(function(token){ return haystack.includes(token); });
+  var scoredMatches = pool.map(function(product) {
+    var result = scoreProductSearch(product, q);
+    return { product: product, score: result.score, fuzzy: result.fuzzy };
+  }).filter(function(item) {
+    return item.score > 0;
+  }).sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score;
+    return String(a.product.name).localeCompare(String(b.product.name), 'tr-TR');
   });
 
-  var fuzzyUsed = false;
-  if (matches.length === 0 && ql.length >= 4) {
-    fuzzyUsed = true;
-    matches = pool.map(function(p) {
-      var nameScore = similarity(ql, p.name);
-      var wordScore = Math.max.apply(null, normalizeText(p.name).split(' ').map(function(word){ return similarity(ql, word); }));
-      return { product: p, score: Math.max(nameScore, wordScore) };
-    }).filter(function(item){ return item.score >= .38; })
-      .sort(function(a,b){ return b.score - a.score; })
-      .slice(0, 30)
-      .map(function(item){ return item.product; });
-  }
+  var fuzzyUsed = scoredMatches.length > 0 && scoredMatches.every(function(item){ return item.fuzzy; });
+  var matches = scoredMatches.map(function(item){ return item.product; });
 
   if (matches.length === 0) { showResult(null); sugEl.innerHTML = ''; return; }
 
