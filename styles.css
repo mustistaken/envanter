@@ -548,12 +548,19 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
 .form-field textarea { min-height: 82px; padding: 11px 12px; resize: vertical; }
 .add-product-modal-card { width: min(100%, 500px); }
 .add-product-destination {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px;
   margin-top: 12px; padding: 11px 12px;
   border: 1px solid #dce5f0; border-radius: 12px; background: #f6f9fc;
 }
-.add-product-destination span { color: var(--ink-500); font-size: 8px; font-weight: 900; letter-spacing: .08em; }
-.add-product-destination strong { color: var(--ink-700); font-size: 11px; }
+.add-product-destination label { color: var(--ink-500); font-size: 8px; font-weight: 900; letter-spacing: .08em; }
+.add-product-destination select {
+  width: 100%; height: 38px; min-width: 0; padding: 0 34px 0 11px;
+  border: 1.5px solid #cfdae7; border-radius: 10px;
+  background-color: #fff; color: var(--ink-700); font-size: 11px; font-weight: 800;
+}
+.add-product-sheet-hint { margin: 7px 2px 0; color: var(--ink-500); font-size: 9px; line-height: 1.45; }
+.form-field.is-disabled { opacity: .55; }
+.form-field input:disabled { cursor: not-allowed; }
 .add-product-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; margin-top: 14px; }
 .add-product-actions button {
   min-height: 44px; padding: 9px 12px; border: 0; border-radius: 12px;
