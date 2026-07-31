@@ -1,9 +1,9 @@
-const CACHE_NAME = 'teknikel-v14-2';
+const CACHE_NAME = 'teknikel-v14-4';
 const APP_SHELL = [
   './',
   './index.html',
-  './styles.css?v=14.2',
-  './app.js?v=14.2',
+  './styles.css?v=14.4',
+  './app.js?v=14.4',
   './manifest.json',
   './magmaweld-logo.png',
   './icon.png'
@@ -57,4 +57,3 @@ self.addEventListener('fetch', event => {
     }))
   );
 });
-
