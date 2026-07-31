@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.3">
+<link rel="stylesheet" href="styles.css?v=14.4">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -76,8 +76,15 @@
       <strong id="statLastSync">Bekleniyor</strong>
       <small>Güvenli Google verisi</small>
     </article>
+    <article class="overview-card overview-card--rates">
+      <span>DÖVİZ KURU</span>
+      <div class="exchange-rates" aria-label="Euro ve Amerikan doları Türk lirası kurları">
+        <strong><b>€</b><span id="eurTryRate">—</span></strong>
+        <strong><b>$</b><span id="usdTryRate">—</span></strong>
+      </div>
+      <small id="exchangeRateDate">Güncelleniyor</small>
+    </article>
   </section>
-
 
   <button class="mobile-basket-summary" id="mobileBasketSummary" type="button" onclick="showTab('sepet')" aria-label="Sepeti aç">
     <span><small>SEPET</small><strong id="mobileBasketItems">0 ürün</strong></span>
@@ -159,7 +166,6 @@
           <tbody><tr>
             <td id="resName" style="font-weight:bold;color:#1a1a1a;background:#f5f5f5">—</td>
             <td id="resPrice" style="font-weight:bold;color:#1F4E79;font-size:16px;background:#E2EFDA">—</td>
-
             <td id="resStatus" style="color:#888;background:#f5f5f5">Bekliyor...</td>
           </tr></tbody>
         </table>
@@ -240,7 +246,6 @@
         <div class="saved-list" id="savedBasketList">
           <span class="quick-empty">Kayıtlı sepet bulunmuyor.</span>
         </div>
-
       </section>
       <section class="card export-card">
         <div class="quick-head">
@@ -321,7 +326,6 @@
     </div>
     <div class="favorite-group-row">
       <label for="favoriteGroupInput">FAVORİ GRUBU</label>
-
       <input type="text" id="favoriteGroupInput" list="favoriteGroupOptions" placeholder="Örn. Sık kullanılanlar">
       <datalist id="favoriteGroupOptions">
         <option value="Sık kullanılanlar"></option>
@@ -374,7 +378,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.2"></script>
+<script src="app.js?v=14.4"></script>
 </body>
 </html>
-
