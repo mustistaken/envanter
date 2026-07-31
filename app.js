@@ -20,6 +20,10 @@ let barcodeLibraryPromise = null;
 let lastModalTrigger = null;
 
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
+const EXCHANGE_RATE_URLS = {
+  eur: 'https://api.frankfurter.dev/v2/rate/EUR/TRY',
+  usd: 'https://api.frankfurter.dev/v2/rate/USD/TRY'
+};
 
 function readSession(key) {
   try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
@@ -78,10 +82,10 @@ function unlockApp(token) {
   writeSession(AUTH_TOKEN_KEY, token);
   document.body.classList.remove('auth-pending');
   document.getElementById('authGate').setAttribute('aria-hidden', 'true');
-
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
   loadData();
+  loadExchangeRates();
 }
 
 function handleGoogleCredential(response) {
@@ -151,6 +155,7 @@ function openLocalDesignPreview() {
     '<span class="quick-empty">Gerçek stok bilgileri yalnızca güvenli canlı sitede gösterilir.</span>';
   document.getElementById('infoBox').textContent =
     'Tasarım önizlemesi · Google Sheets ve Apps Script bağlantısı canlı sitede aynen korunur.';
+  loadExchangeRates();
 }
 
 function signOut() {
@@ -159,7 +164,6 @@ function signOut() {
 }
 
 function readStore(key, fallback) {
-
   try {
     var value = JSON.parse(localStorage.getItem(key));
     return value == null ? fallback : value;
@@ -168,6 +172,48 @@ function readStore(key, fallback) {
 
 function writeStore(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+}
+
+function formatExchangeRate(value) {
+  var number = Number(value);
+  if (!isFinite(number)) return '—';
+  return number.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+}
+
+function renderExchangeRates(record, cached) {
+  document.getElementById('eurTryRate').textContent = formatExchangeRate(record && record.eurTry);
+  document.getElementById('usdTryRate').textContent = formatExchangeRate(record && record.usdTry);
+  var dateEl = document.getElementById('exchangeRateDate');
+  if (!record || !record.date) {
+    dateEl.textContent = 'Kur alınamadı';
+    return;
+  }
+  var rateDate = new Date(record.date + 'T12:00:00').toLocaleDateString('tr-TR');
+  dateEl.textContent = (cached ? 'Son kayıt · ' : 'Referans · ') + rateDate;
+}
+
+async function loadExchangeRates() {
+  var cachedRates = readStore('teknikelExchangeRates', null);
+  if (cachedRates) renderExchangeRates(cachedRates, true);
+  try {
+    var responses = await Promise.all([
+      fetch(EXCHANGE_RATE_URLS.eur, { cache: 'no-store' }),
+      fetch(EXCHANGE_RATE_URLS.usd, { cache: 'no-store' })
+    ]);
+    if (!responses[0].ok || !responses[1].ok) throw new Error('Kur servisi yanıt vermedi');
+    var values = await Promise.all(responses.map(function(response){ return response.json(); }));
+    var record = {
+      eurTry: Number(values[0].rate),
+      usdTry: Number(values[1].rate),
+      date: values[0].date || values[1].date || new Date().toISOString().slice(0, 10),
+      savedAt: Date.now()
+    };
+    if (!isFinite(record.eurTry) || !isFinite(record.usdTry)) throw new Error('Kur verisi geçersiz');
+    writeStore('teknikelExchangeRates', record);
+    renderExchangeRates(record, false);
+  } catch (e) {
+    if (!cachedRates) renderExchangeRates(null, false);
+  }
 }
 
 function productKey(product) {
@@ -240,7 +286,6 @@ function closeModal(id) {
   var modal = document.getElementById(id);
   if (!modal.classList.contains('active')) return;
   modal.classList.remove('active');
-
   modal.setAttribute('aria-hidden', 'true');
   if (lastModalTrigger && document.contains(lastModalTrigger)) lastModalTrigger.focus();
   lastModalTrigger = null;
@@ -321,7 +366,6 @@ const SHEETS = [
 
 const RETIRED_DEMO_BARCODES = new Set([
   '869000100001', '869000100002', '869000100003', '869000100004',
-
   '869000100005', '869000100006', '869000100007', '869000100008'
 ]);
 
@@ -401,7 +445,6 @@ async function fetchSecureInventory() {
   if (!payload || !payload.ok || !payload.sheets) throw new Error(payload && payload.error ? payload.error : 'Yetkilendirme başarısız.');
   return SHEETS.map(function(cfg){ return mapSecureSheet(cfg, payload.sheets[cfg.name]); });
 }
-
 
 function setLastSync(value, cached) {
   var el = document.getElementById('lastSyncText');
@@ -483,7 +526,6 @@ function populateBrands() {
   var counts = {};
   products.forEach(function(product) {
     var brand = getBrand(product);
-
     if (brand) counts[brand] = (counts[brand] || 0) + 1;
   });
   var brands = Object.keys(counts).sort(function(a, b){ return a.localeCompare(b, 'tr'); });
@@ -564,7 +606,6 @@ function escapeHtml(val) {
   return String(val == null ? '' : val)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
@@ -645,7 +686,6 @@ function showResult(found) {
 function openProductDetail() {
   if (!currentProduct) return;
   var stockInfo = getStockInfo(currentProduct);
-
   document.getElementById('productDetailTitle').textContent = currentProduct.name || 'Ürün bilgileri';
   document.getElementById('detailCategory').textContent = currentProduct.sheet || 'Kategori belirtilmedi';
   document.getElementById('detailPrice').textContent = formatPrice(currentProduct.price);
@@ -727,7 +767,6 @@ function openProductByKey(key) {
   window.scrollTo({ top: document.querySelector('.search-card').offsetTop - 20, behavior: 'smooth' });
 }
 
-
 function openProductByEncodedKey(encodedKey) {
   openProductByKey(decodeURIComponent(encodedKey));
 }
@@ -807,7 +846,6 @@ function search(q) {
   var ql = normalizeText(q);
   var tokens = ql.split(' ').filter(Boolean);
   var matches = pool.filter(function(p) {
-
     var haystack = normalizeText(p.name + ' ' + p.barcode + ' ' + p.sheet);
     return tokens.every(function(token){ return haystack.includes(token); });
   });
@@ -887,7 +925,6 @@ function removeFromBasket(idx) {
   renderBasket(); updateBadge();
   showToast('Ürün sepetten çıkarıldı.');
 }
-
 
 function changeBasketQty(idx, delta) {
   var item = basket[idx];
@@ -969,7 +1006,6 @@ function saveCurrentBasket() {
   if (!basket.length) { showToast('Kaydetmek için sepete ürün ekleyin.'); return; }
   var input = document.getElementById('basketSaveName');
   var name = input.value.trim() || ('Teklif ' + new Date().toLocaleDateString('tr-TR'));
-
   var record = {
     id: Date.now(),
     name: name.trim(),
@@ -1050,7 +1086,6 @@ function exportProductsCsv() {
 }
 
 function exportBasketCsv() {
-
   if (!basket.length) { showToast('Aktarmak için sepete ürün ekleyin.'); return; }
   var totals = getBasketTotals();
   var rows = [['Ürün', 'Kategori', 'Birim fiyat', 'Adet', 'Toplam']];
@@ -1131,7 +1166,6 @@ function buildOfferText() {
 function saveOfferHistory() {
   if (!basket.length) { showToast('Kaydetmek için sepete ürün ekleyin.'); return; }
   ensureOfferNumber();
-
   var customer = document.getElementById('customerName').value.trim() || 'Müşteri belirtilmedi';
   var record = {
     id: currentOfferNumber,
@@ -1212,7 +1246,6 @@ function copyText(text, successMessage) {
     navigator.clipboard.writeText(text)
       .then(function(){ showToast(successMessage); })
       .catch(function(){ copyTextFallback(text, successMessage); });
-
   } else {
     copyTextFallback(text, successMessage);
   }
@@ -1293,7 +1326,6 @@ function showTab(tab) {
 
 var searchTimer = null;
 document.getElementById('searchInput').addEventListener('input', function(e){
-
   clearTimeout(searchTimer);
   var value = e.target.value;
   searchTimer = setTimeout(function(){ search(value); }, 120);
@@ -1374,7 +1406,6 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
     showToast('Kamera açılamadı: ' + e.message);
     stopCam();
   } finally {
-
     scanButton.disabled = false;
   }
 });
@@ -1409,7 +1440,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.2').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.4').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -1422,4 +1453,3 @@ renderQuickLists();
 renderCustomerProfiles();
 if (isLocalDesignPreview()) openLocalDesignPreview();
 else initializeAuth();
-
