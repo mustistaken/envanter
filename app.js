@@ -511,6 +511,87 @@ function refreshData() {
   loadData(true);
 }
 
+function openAddProductModal() {
+  if (!isUsableCredential(googleIdToken)) {
+    showToast('Ürün eklemek için Google hesabınızla yeniden giriş yapın.');
+    return;
+  }
+  document.getElementById('addProductForm').reset();
+  openModal('addProductModal');
+  requestAnimationFrame(function() {
+    document.getElementById('newProductCode').focus();
+  });
+}
+
+function closeAddProductModal() {
+  closeModal('addProductModal');
+}
+
+async function submitAddProduct(event) {
+  event.preventDefault();
+  if (!isUsableCredential(googleIdToken)) {
+    closeAddProductModal();
+    showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+    return;
+  }
+
+  var form = document.getElementById('addProductForm');
+  if (!form.reportValidity()) return;
+
+  var saveBtn = document.getElementById('saveProductBtn');
+  var product = {
+    code: document.getElementById('newProductCode').value.trim(),
+    name: document.getElementById('newProductName').value.trim(),
+    price: Number(document.getElementById('newProductPrice').value),
+    stock: Number(document.getElementById('newProductStock').value)
+  };
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Kaydediliyor…';
+  try {
+    var response = await fetch(INVENTORY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({
+        action: 'addProduct',
+        idToken: googleIdToken,
+        product: product
+      }),
+      cache: 'no-store',
+      redirect: 'follow'
+    });
+    if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
+    var payload = await response.json();
+    if (!payload || !payload.ok || payload.action !== 'addProduct') {
+      throw new Error(payload && payload.error ? payload.error : 'Ürün kaydedilemedi.');
+    }
+
+    closeAddProductModal();
+    form.reset();
+    await loadData(false);
+    var added = products.find(function(item) {
+      return item.sheet === 'Envanter' && String(item.barcode) === String(product.code);
+    });
+    if (added) {
+      document.getElementById('searchInput').value = added.name;
+      showResult(added);
+      addRecentProduct(added);
+      showToast('Ürün Envanter sayfasına eklendi ve liste yenilendi.');
+    } else {
+      showToast('Ürün Envanter sayfasına eklendi. Listeyi yeniden yenileyin.');
+    }
+  } catch (error) {
+    showToast(String(error && error.message || error));
+    if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(error && error.message || ''))) {
+      closeAddProductModal();
+      showAuthGate(String(error.message) + ' Lütfen yeniden giriş yapın.', true);
+    }
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '＋ Ürünü kaydet';
+  }
+}
+
 function populateCategories() {
   var select = document.getElementById('categoryFilter');
   var current = select.value;
@@ -1349,6 +1430,9 @@ document.getElementById('productDetailModal').addEventListener('click', function
 document.getElementById('adminModal').addEventListener('click', function(e) {
   if (e.target === this) closeAdminModal();
 });
+document.getElementById('addProductModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddProductModal();
+});
 document.addEventListener('keydown', function(e) {
   var activeModal = document.querySelector('.modal.active');
   if (e.key === 'Tab' && activeModal) {
@@ -1365,6 +1449,7 @@ document.addEventListener('keydown', function(e) {
   closeOfferModal();
   closeProductDetail();
   closeAdminModal();
+  closeAddProductModal();
   if (document.getElementById('overlay').classList.contains('active')) stopCam();
 });
 
