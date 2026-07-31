@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.6">
+<link rel="stylesheet" href="styles.css?v=14.7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -313,7 +313,7 @@
       <div>
         <span class="section-kicker">ENVANTERE KAYDET</span>
         <h2 id="addProductTitle">Yeni ürün ekle</h2>
-        <p>Ürün doğrudan Google Sheets’teki Envanter sayfasına eklenir.</p>
+        <p>Ürün, seçtiğiniz Google Sheets sayfasına doğrudan eklenir.</p>
       </div>
       <button class="modal-close" type="button" onclick="closeAddProductModal()" aria-label="Kapat">×</button>
     </div>
@@ -323,7 +323,7 @@
           <label for="newProductCode">ÜRÜN KODU</label>
           <input type="text" id="newProductCode" name="code" maxlength="80" required autocomplete="off" placeholder="Örn. 123456">
         </div>
-        <div class="form-field">
+        <div class="form-field" id="newProductStockField">
           <label for="newProductStock">STOK ADEDİ</label>
           <input type="number" id="newProductStock" name="stock" min="0" step="1" required inputmode="numeric" placeholder="0">
         </div>
@@ -337,9 +337,19 @@
         </div>
       </div>
       <div class="add-product-destination">
-        <span>KAYIT YERİ</span>
-        <strong>envanter › Envanter</strong>
+        <label for="newProductSheet">KAYIT YERİ</label>
+        <select id="newProductSheet" name="sheet" onchange="updateAddProductSheetFields()" required>
+          <option value="Envanter">Envanter</option>
+          <option value="Trafimet">Trafimet</option>
+          <option value="MW Torç ve Sarfları">MW Torç ve Sarfları</option>
+          <option value="MW Kaynak Makinaları">MW Kaynak Makinaları</option>
+          <option value="Kaynak Tamamlayıcı Ürünler">Kaynak Tamamlayıcı Ürünler</option>
+          <option value="Özlü Teller">Özlü Teller</option>
+          <option value="Örtülü Elektrodlar">Örtülü Elektrodlar</option>
+          <option value="MIG-MAG ve TIG Telleri">MIG-MAG ve TIG Telleri</option>
+        </select>
       </div>
+      <p class="add-product-sheet-hint" id="newProductSheetHint">Stok bilgisi Envanter sayfasına kaydedilir.</p>
       <div class="add-product-actions">
         <button class="product-cancel-btn" type="button" onclick="closeAddProductModal()">Vazgeç</button>
         <button class="product-save-btn" id="saveProductBtn" type="submit">＋ Ürünü kaydet</button>
@@ -448,6 +458,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.6"></script>
+<script src="app.js?v=14.7"></script>
 </body>
 </html>
