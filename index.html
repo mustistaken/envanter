@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.5">
+<link rel="stylesheet" href="styles.css?v=14.6">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -43,7 +43,7 @@
             <summary aria-label="Hesap ve ayarlar">•••</summary>
             <div class="utility-menu-panel">
               <button class="utility-action" id="themeBtn" onclick="toggleTheme()">Tema değiştir</button>
-              <button class="utility-action" onclick="openAdminModal()">Yönetim merkezi</button>
+              <button class="utility-action" id="adminCenterBtn" onclick="openAdminModal()">Yönetim merkezi</button>
               <button class="utility-action account-btn" id="accountBtn" onclick="signOut()" title="Google oturumunu kapat">
                 <span id="accountEmail">Google hesabı</span> · Çıkış
               </button>
@@ -403,8 +403,36 @@
         <strong>Verileri şimdi yenile</strong>
         <span>Google Sheets kayıtlarını tekrar okur</span>
       </button>
+      <button class="admin-action" onclick="openAccessModal()">
+        <strong>＋ Erişim izni ver</strong>
+        <span>E-posta adresiyle yeni bir görüntüleme yetkisi ekler</span>
+      </button>
     </div>
     <p class="admin-note">Ürün verileri yalnızca yetkili Google hesabı doğrulandıktan sonra güvenli servis üzerinden alınır. Site kodunda parola veya gizli anahtar bulunmaz.</p>
+  </div>
+</div>
+
+<div class="modal" id="accessModal" role="dialog" aria-modal="true" aria-labelledby="accessTitle" aria-hidden="true">
+  <div class="modal-card access-modal-card">
+    <div class="modal-head">
+      <div>
+        <span class="section-kicker">GÜVENLİ ERİŞİM</span>
+        <h2 id="accessTitle">Erişim izni ver</h2>
+        <p>Eklediğiniz kişi kendi Google hesabıyla envantere giriş yapabilir.</p>
+      </div>
+      <button class="modal-close" type="button" onclick="closeAccessModal()" aria-label="Kapat">×</button>
+    </div>
+    <form id="accessForm" onsubmit="submitAccessGrant(event)">
+      <div class="form-field">
+        <label for="accessEmail">GOOGLE HESABI E-POSTASI</label>
+        <input type="email" id="accessEmail" name="email" maxlength="254" required autocomplete="email" placeholder="ornek@gmail.com">
+      </div>
+      <p class="access-note">Bu izin envanteri görüntüleme ve teklif hazırlama içindir. Ürün ekleme ve yetki verme hakkı yalnızca yönetici hesabında kalır.</p>
+      <div class="add-product-actions">
+        <button class="product-cancel-btn" type="button" onclick="closeAccessModal()">Vazgeç</button>
+        <button class="product-save-btn" id="saveAccessBtn" type="submit">Erişim izni ver</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -420,6 +448,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.5"></script>
+<script src="app.js?v=14.6"></script>
 </body>
 </html>
