@@ -1,7 +1,9 @@
 const GOOGLE_CLIENT_ID = '334267311865-5oqahpjifptf1j67httml63h0gvq0g38.apps.googleusercontent.com';
 const INVENTORY_API_URL = 'https://script.google.com/macros/s/AKfycbxyCdJ0btfjuZgGF5X0Up7ugD2qEMr-jQHVKtPp-MI466roWtnDb0hPweI71iknVOXBvA/exec';
 const AUTH_TOKEN_KEY = 'teknikelGoogleIdToken';
+const ADMIN_EMAIL = 'mustafaozllu@gmail.com';
 let googleIdToken = '';
+let signedInEmail = '';
 let authInitialized = false;
 
 let products = [], currentProduct = null, iskontoOrani = 0;
@@ -64,6 +66,7 @@ function setAuthStatus(message, isError) {
 
 function showAuthGate(message, isError) {
   googleIdToken = '';
+  signedInEmail = '';
   writeSession(AUTH_TOKEN_KEY, '');
   products = [];
   try {
@@ -76,6 +79,17 @@ function showAuthGate(message, isError) {
   setAuthStatus(message || 'Yetkili Google hesabınızla giriş yapın.', isError);
 }
 
+function isAdminAccount() {
+  return String(signedInEmail || '').toLowerCase() === ADMIN_EMAIL;
+}
+
+function applyRoleVisibility(email) {
+  signedInEmail = String(email || '').toLowerCase();
+  var isAdmin = isAdminAccount();
+  document.getElementById('addProductBtn').hidden = !isAdmin;
+  document.getElementById('adminCenterBtn').hidden = !isAdmin;
+}
+
 function unlockApp(token) {
   var payload = decodeGoogleCredential(token);
   googleIdToken = token;
@@ -84,6 +98,7 @@ function unlockApp(token) {
   document.getElementById('authGate').setAttribute('aria-hidden', 'true');
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
+  applyRoleVisibility(payload && payload.email ? payload.email : '');
   loadData();
   loadExchangeRates();
 }
@@ -146,6 +161,7 @@ function openLocalDesignPreview() {
   document.getElementById('authGate').setAttribute('aria-hidden', 'true');
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = 'Önizleme hesabı';
+  applyRoleVisibility(ADMIN_EMAIL);
   document.getElementById('statProductCount').textContent = '3.334';
   document.getElementById('statCriticalCount').textContent = 'Canlı veride';
   document.getElementById('statLastSync').textContent = 'Şimdi';
@@ -1367,11 +1383,81 @@ function printOffer() {
 }
 
 function openAdminModal() {
+  if (!isAdminAccount()) {
+    showToast('Yönetim merkezi yalnızca yönetici hesabına açıktır.');
+    return;
+  }
   openModal('adminModal');
 }
 
 function closeAdminModal() {
   closeModal('adminModal');
+}
+
+function openAccessModal() {
+  if (!isAdminAccount()) {
+    showToast('Erişim izni yalnızca yönetici hesabı verebilir.');
+    return;
+  }
+  closeAdminModal();
+  document.getElementById('accessForm').reset();
+  openModal('accessModal');
+  requestAnimationFrame(function() {
+    document.getElementById('accessEmail').focus();
+  });
+}
+
+function closeAccessModal() {
+  closeModal('accessModal');
+}
+
+async function submitAccessGrant(event) {
+  event.preventDefault();
+  if (!isAdminAccount() || !isUsableCredential(googleIdToken)) {
+    closeAccessModal();
+    showAuthGate('Yönetici oturumu gerekli. Lütfen yeniden giriş yapın.', true);
+    return;
+  }
+
+  var form = document.getElementById('accessForm');
+  if (!form.reportValidity()) return;
+  var email = document.getElementById('accessEmail').value.trim().toLowerCase();
+  var saveBtn = document.getElementById('saveAccessBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'İzin veriliyor…';
+
+  try {
+    var response = await fetch(INVENTORY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({
+        action: 'grantAccess',
+        idToken: googleIdToken,
+        email: email
+      }),
+      cache: 'no-store',
+      redirect: 'follow'
+    });
+    if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
+    var payload = await response.json();
+    if (!payload || !payload.ok || payload.action !== 'grantAccess') {
+      throw new Error(payload && payload.error ? payload.error : 'Erişim izni verilemedi.');
+    }
+
+    form.reset();
+    closeAccessModal();
+    showToast(payload.access && payload.access.alreadyAllowed
+      ? email + ' zaten erişim listesinde.'
+      : email + ' için erişim izni verildi.');
+  } catch (error) {
+    showToast(String(error && error.message || error));
+    if (/oturum|yönetici|doğrulama|yetkilendirme/i.test(String(error && error.message || ''))) {
+      closeAccessModal();
+    }
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Erişim izni ver';
+  }
 }
 
 function applyTheme(theme) {
@@ -1433,6 +1519,9 @@ document.getElementById('adminModal').addEventListener('click', function(e) {
 document.getElementById('addProductModal').addEventListener('click', function(e) {
   if (e.target === this) closeAddProductModal();
 });
+document.getElementById('accessModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAccessModal();
+});
 document.addEventListener('keydown', function(e) {
   var activeModal = document.querySelector('.modal.active');
   if (e.key === 'Tab' && activeModal) {
@@ -1450,6 +1539,7 @@ document.addEventListener('keydown', function(e) {
   closeProductDetail();
   closeAdminModal();
   closeAddProductModal();
+  closeAccessModal();
   if (document.getElementById('overlay').classList.contains('active')) stopCam();
 });
 
