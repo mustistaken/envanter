@@ -2,10 +2,14 @@ const GOOGLE_CLIENT_ID = '334267311865-5oqahpjifptf1j67httml63h0gvq0g38.apps.goo
 const INVENTORY_API_URL = 'https://script.google.com/macros/s/AKfycbxyCdJ0btfjuZgGF5X0Up7ugD2qEMr-jQHVKtPp-MI466roWtnDb0hPweI71iknVOXBvA/exec';
 const AUTH_TOKEN_KEY = 'teknikelGoogleIdToken';
 const AUTO_SIGN_IN_KEY = 'teknikelAutoSignIn';
+const REDIRECT_SIGN_IN_STATE_KEY = 'teknikelRedirectSignInState';
+const REDIRECT_SIGN_IN_NONCE_KEY = 'teknikelRedirectSignInNonce';
+const REDIRECT_SIGN_IN_URI = 'https://mustistaken.github.io/envanter/';
 const ADMIN_EMAIL = 'mustafaozllu@gmail.com';
 let googleIdToken = '';
 let signedInEmail = '';
 let authInitialized = false;
+let redirectAuthError = '';
 
 let products = [], currentProduct = null, iskontoOrani = 0;
 let basket = [];
@@ -73,6 +77,65 @@ function isUsableCredential(token) {
     String(payload.aud || '') === GOOGLE_CLIENT_ID &&
     (payload.email_verified === true || payload.email_verified === 'true') &&
     Number(payload.exp || 0) * 1000 > Date.now() + 30000);
+}
+
+function randomUrlSafeToken() {
+  if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Güvenli giriş anahtarı üretilemedi.');
+  var bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode.apply(null, bytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function startRedirectSignIn() {
+  try {
+    var state = randomUrlSafeToken();
+    var nonce = randomUrlSafeToken();
+    writeSession(REDIRECT_SIGN_IN_STATE_KEY, state);
+    writeSession(REDIRECT_SIGN_IN_NONCE_KEY, nonce);
+    setAuthStatus('Google giriş sayfasına yönlendiriliyorsunuz…', false);
+    var authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+    authUrl.searchParams.set('redirect_uri', REDIRECT_SIGN_IN_URI);
+    authUrl.searchParams.set('response_type', 'id_token');
+    authUrl.searchParams.set('response_mode', 'fragment');
+    authUrl.searchParams.set('scope', 'openid email');
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('nonce', nonce);
+    authUrl.searchParams.set('prompt', 'select_account');
+    window.location.assign(authUrl.toString());
+  } catch (error) {
+    setAuthStatus(String(error && error.message || error), true);
+  }
+}
+
+function consumeRedirectCredential() {
+  var hash = String(window.location.hash || '');
+  if (!hash || (hash.indexOf('id_token=') === -1 && hash.indexOf('error=') === -1)) return false;
+
+  var params = new URLSearchParams(hash.slice(1));
+  var token = params.get('id_token') || '';
+  var state = params.get('state') || '';
+  var expectedState = readSession(REDIRECT_SIGN_IN_STATE_KEY);
+  var expectedNonce = readSession(REDIRECT_SIGN_IN_NONCE_KEY);
+  writeSession(REDIRECT_SIGN_IN_STATE_KEY, '');
+  writeSession(REDIRECT_SIGN_IN_NONCE_KEY, '');
+  history.replaceState(null, document.title, window.location.pathname + window.location.search);
+
+  if (params.get('error')) {
+    redirectAuthError = 'Google yönlendirmeli giriş tamamlanamadı. Lütfen tekrar deneyin.';
+    return false;
+  }
+
+  var payload = decodeGoogleCredential(token);
+  if (!expectedState || !expectedNonce || state !== expectedState ||
+      !payload || String(payload.nonce || '') !== expectedNonce || !isUsableCredential(token)) {
+    redirectAuthError = 'Yönlendirmeli giriş doğrulanamadı. Lütfen tekrar deneyin.';
+    return false;
+  }
+
+  handleGoogleCredential({ credential: token });
+  return true;
 }
 
 function setAuthStatus(message, isError) {
@@ -222,7 +285,8 @@ function initializeAuth() {
       if (isUsableCredential(storedToken)) {
         unlockApp(storedToken);
       } else {
-        showAuthGate('Yetkili Google hesabınızla giriş yapın.', false);
+        showAuthGate(redirectAuthError || 'Yetkili Google hesabınızla giriş yapın.', !!redirectAuthError);
+        redirectAuthError = '';
         requestAutomaticSignIn();
       }
     } else if (attempts >= 80) {
@@ -2256,7 +2320,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.23').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.24').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -2268,4 +2332,4 @@ renderOfferHistory();
 renderQuickLists();
 renderCustomerProfiles();
 if (isLocalDesignPreview()) openLocalDesignPreview();
-else initializeAuth();
+else if (!consumeRedirectCredential()) initializeAuth();
