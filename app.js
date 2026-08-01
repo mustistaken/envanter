@@ -7,13 +7,13 @@ let signedInEmail = '';
 let authInitialized = false;
 
 let products = [], currentProduct = null, iskontoOrani = 0;
-let basket = readStore('teknikelCurrentBasket', []);
-let favorites = readStore('teknikelFavorites', []);
-let recentProducts = readStore('teknikelRecentProducts', []);
-let savedBaskets = readStore('teknikelSavedBaskets', []);
-let customerProfiles = readStore('teknikelCustomerProfiles', []);
-let offerHistory = readStore('teknikelOfferHistory', []);
-let favoriteGroups = readStore('teknikelFavoriteGroups', {});
+let basket = [];
+let favorites = [];
+let recentProducts = [];
+let savedBaskets = [];
+let customerProfiles = [];
+let offerHistory = [];
+let favoriteGroups = {};
 let deferredInstallPrompt = null;
 let toastTimer = null;
 let currentOfferNumber = '';
@@ -69,6 +69,7 @@ function showAuthGate(message, isError) {
   clearTokenExpiryCheck();
   googleIdToken = '';
   signedInEmail = '';
+  resetUserStoresInMemory();
   writeSession(AUTH_TOKEN_KEY, '');
   products = [];
   try {
@@ -101,6 +102,7 @@ function unlockApp(token) {
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
   applyRoleVisibility(payload && payload.email ? payload.email : '');
+  loadUserStores();
   loadData();
   loadExchangeRates();
   // Schedule automatic sign-out based on token expiry
@@ -196,6 +198,7 @@ function openLocalDesignPreview() {
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = 'Önizleme hesabı';
   applyRoleVisibility(ADMIN_EMAIL);
+  loadUserStores();
   document.getElementById('statProductCount').textContent = '3.334';
   document.getElementById('statCriticalCount').textContent = 'Canlı veride';
   document.getElementById('statLastSync').textContent = 'Şimdi';
@@ -217,9 +220,33 @@ function signOut() {
   showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
 }
 
+const USER_STORE_KEYS = new Set([
+  'teknikelCurrentBasket',
+  'teknikelFavorites',
+  'teknikelRecentProducts',
+  'teknikelSavedBaskets',
+  'teknikelCustomerProfiles',
+  'teknikelOfferHistory',
+  'teknikelFavoriteGroups'
+]);
+
+function persistentStoreKey(key) {
+  if (!USER_STORE_KEYS.has(key)) return key;
+  return key + '::' + (signedInEmail || 'signed-out');
+}
+
 function readStore(key, fallback) {
   try {
-    var raw = readSession(key);
+    var scopedKey = persistentStoreKey(key);
+    var raw = localStorage.getItem(scopedKey);
+    if (!raw && USER_STORE_KEYS.has(key) && isAdminAccount()) {
+      var legacyValue = localStorage.getItem(key);
+      if (legacyValue) {
+        localStorage.setItem(scopedKey, legacyValue);
+        localStorage.removeItem(key);
+        raw = legacyValue;
+      }
+    }
     if (!raw) return fallback;
     var value = JSON.parse(raw);
     return value == null ? fallback : value;
@@ -227,7 +254,37 @@ function readStore(key, fallback) {
 }
 
 function writeStore(key, value) {
-  try { writeSession(key, value ? JSON.stringify(value) : ''); } catch (e) {}
+  try {
+    var storageKey = persistentStoreKey(key);
+    if (value == null) localStorage.removeItem(storageKey);
+    else localStorage.setItem(storageKey, JSON.stringify(value));
+  } catch (e) {}
+}
+
+function resetUserStoresInMemory() {
+  basket = [];
+  favorites = [];
+  recentProducts = [];
+  savedBaskets = [];
+  customerProfiles = [];
+  offerHistory = [];
+  favoriteGroups = {};
+}
+
+function loadUserStores() {
+  basket = readStore('teknikelCurrentBasket', []);
+  favorites = readStore('teknikelFavorites', []);
+  recentProducts = readStore('teknikelRecentProducts', []);
+  savedBaskets = readStore('teknikelSavedBaskets', []);
+  customerProfiles = readStore('teknikelCustomerProfiles', []);
+  offerHistory = readStore('teknikelOfferHistory', []);
+  favoriteGroups = readStore('teknikelFavoriteGroups', {});
+  renderBasket();
+  updateBadge();
+  renderSavedBaskets();
+  renderOfferHistory();
+  renderQuickLists();
+  renderCustomerProfiles();
 }
 
 function formatExchangeRate(value) {
@@ -1763,6 +1820,11 @@ document.getElementById('searchInput').addEventListener('input', function(e){
 ['customerName', 'offerValidity', 'offerNote'].forEach(function(id) {
   document.getElementById(id).addEventListener('input', updateOfferSummary);
 });
+document.getElementById('iskontoCustom').addEventListener('input', function(e){ setIskontoCustom(e.target.value); });
+document.getElementById('addProductForm').addEventListener('submit', submitAddProduct);
+document.getElementById('newProductCurrency').addEventListener('change', updateAddProductCurrencyHint);
+document.getElementById('newProductSheet').addEventListener('change', updateAddProductSheetFields);
+document.getElementById('accessForm').addEventListener('submit', submitAccessGrant);
 document.getElementById('customerName').addEventListener('change', applyCustomerProfile);
 document.getElementById('offerModal').addEventListener('click', function(e) {
   if (e.target === this) closeOfferModal();
@@ -1842,84 +1904,6 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
   }
 });
 
-// Bind elements with inline onclick to addEventListener where possible.
-// Supports simple calls like fn(), fn(123), fn('str'), fn(this), fn(123, 'a', this),
-// multiple statements separated by semicolons, and simple DOM method calls like document.getElementById('id').focus().
-(function bindInlineOnclicks(){
-  try {
-    var elements = Array.from(document.querySelectorAll('[onclick]'));
-    elements.forEach(function(el){
-      var attr = el.getAttribute('onclick') || '';
-      // Split into semicolon-separated statements and parse each
-      var statements = attr.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
-      if (!statements.length) return;
-
-      var handlers = [];
-      var unsafe = false;
-
-      for (var si = 0; si < statements.length; si++) {
-        var stmt = statements[si];
-        // functionName(args)
-        var fnCall = stmt.match(/^\s*([A-Za-z0-9_$]+)\s*\((.*)\)\s*$/);
-        if (fnCall) {
-          var fnName = fnCall[1];
-          var argsText = fnCall[2].trim();
-          var fn = window[fnName];
-          if (typeof fn !== 'function') { unsafe = true; break; }
-
-          var parsedArgs = [];
-          if (argsText.length > 0) {
-            var parts = argsText.match(/('(?:\\'|[^'])*'|\"(?:\\\"|[^\"])*\"|[^,]+)/g);
-            if (!parts) { unsafe = true; break; }
-            for (var pi = 0; pi < parts.length; pi++) {
-              var p = parts[pi].trim();
-              if (/^this$/i.test(p)) { parsedArgs.push(function(el){ return function(){ return el; }; }(el)); continue; }
-              if (/^[-+]?[0-9]*\.?[0-9]+$/.test(p)) { parsedArgs.push(Number(p)); continue; }
-              var mstr = p.match(/^['\"]([\s\S]*)['\"]$/);
-              if (mstr) { parsedArgs.push(mstr[1].replace(/\\(['\"]) /g,'$1')); continue; }
-              unsafe = true; break;
-            }
-            if (unsafe) break;
-          }
-
-          (function(fn, parsedArgs){
-            handlers.push(function(e){
-              var resolved = parsedArgs.map(function(a){ return (typeof a === 'function' && a.length === 0) ? a() : a; });
-              try { fn.apply(el, resolved.length ? resolved : [e]); } catch (err) { console.error('delegated fn error', err); }
-            });
-          })(fn, parsedArgs);
-          continue;
-        }
-
-        // document.getElementById('id').method()
-        var domMethod = stmt.match(/^\s*document\.getElementById\(['\"]([^'\"]+)['\"]\)\.([A-Za-z0-9_$]+)\s*\(\s*\)\s*$/);
-        if (domMethod) {
-          (function(id, method){ handlers.push(function(){ try { var t = document.getElementById(id); if (t && typeof t[method] === 'function') t[method](); } catch(e){ console.error('dom method error', e); } }); })(domMethod[1], domMethod[2]);
-          continue;
-        }
-
-        // Unsupported statement
-        unsafe = true; break;
-      }
-
-      if (unsafe || !handlers.length) return; // skip complex onclicks for safety
-
-      var marker = 'data-bound-inline';
-      if (el.hasAttribute(marker)) return;
-      el.addEventListener('click', function(e){
-        for (var h = 0; h < handlers.length; h++) {
-          try { handlers[h](e); } catch(err) { console.error('handler error', err); }
-        }
-      });
-      el.setAttribute(marker, '1');
-      el.removeAttribute('onclick');
-    });
-  } catch (e) { console.warn('bindInlineOnclicks failed', e); }
-})();
-
-  }
-});
-
 // Delegated handler for data-action/data-args attributes
 (function addDataActionDelegation(){
   function resolveArg(arg, hostEl){
@@ -1938,7 +1922,12 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
     var args = [];
     var argsAttr = el.getAttribute('data-args');
     if (argsAttr) {
-      try { args = JSON.parse(argsAttr); } catch(err){ args = [argsAttr]; }
+      try {
+        args = JSON.parse(argsAttr);
+      } catch (err) {
+        try { args = JSON.parse(decodeURIComponent(argsAttr)); }
+        catch (decodeError) { args = [argsAttr]; }
+      }
     }
     args = args.map(function(a){ return resolveArg(a, el); });
     var fn = window[action];
@@ -1987,7 +1976,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.14').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.15').catch(function(){}); });
 }
 
 updateConnectionState();
