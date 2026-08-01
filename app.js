@@ -1684,8 +1684,22 @@ document.getElementById('installBtn').addEventListener('click', async function()
   this.style.display = 'none';
 });
 
+var reloadLogo = document.getElementById('reloadLogo');
+if (reloadLogo) {
+  function reloadFromLogo() {
+    window.location.reload();
+  }
+  reloadLogo.addEventListener('click', reloadFromLogo);
+  reloadLogo.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      reloadFromLogo();
+    }
+  });
+}
+
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.4').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.9').catch(function(){}); });
 }
 
 updateConnectionState();
