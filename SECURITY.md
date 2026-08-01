@@ -6,6 +6,7 @@ Current protections
 - Inventory access is enforced server-side with an allowlist; grantAccess and addProduct also require the administrator account.
 - The browser keeps the short-lived Google ID token in sessionStorage, not localStorage. A non-sensitive preference flag enables Google Identity Services to restore the signed-in account automatically after reopening; explicit sign-out removes both.
 - User-specific baskets, favorites and offer data are namespaced by signed-in email.
+- A user-scoped product snapshot (maximum age 12 hours) is stored locally only after successful authentication so the interface opens immediately while fresh data synchronizes in the background; explicit sign-out removes it.
 - Inline HTML event handlers and dynamic executable code are not used.
 - Spreadsheet-bound text entered through addProduct is escaped when it begins with a formula marker.
 - The service worker caches only the static app shell; authenticated API responses are not cached.
