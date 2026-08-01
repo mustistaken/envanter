@@ -21,6 +21,11 @@ let currentOfferNumber = '';
 let isLoadingData = false;
 let barcodeLibraryPromise = null;
 let lastModalTrigger = null;
+let basketCloudSyncTimer = null;
+let basketCloudReady = false;
+let basketCloudApplying = false;
+let basketCloudSaving = false;
+let basketCloudSavePending = false;
 
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
 const EXCHANGE_RATE_URLS = {
@@ -299,9 +304,17 @@ function writeStore(key, value) {
     if (value == null) localStorage.removeItem(storageKey);
     else localStorage.setItem(storageKey, JSON.stringify(value));
   } catch (e) {}
+  if (key === 'teknikelCurrentBasket' && basketCloudReady && !basketCloudApplying) {
+    scheduleBasketCloudSync();
+  }
 }
 
 function resetUserStoresInMemory() {
+  clearTimeout(basketCloudSyncTimer);
+  basketCloudReady = false;
+  basketCloudApplying = false;
+  basketCloudSaving = false;
+  basketCloudSavePending = false;
   basket = [];
   favorites = [];
   recentProducts = [];
@@ -328,6 +341,90 @@ function loadUserStores() {
   renderOfferHistory();
   renderQuickLists();
   renderCustomerProfiles();
+}
+
+function sanitizeCloudBasketItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, 500).map(function(item) {
+    if (!item || !String(item.name || '').trim()) return null;
+    var price = item.price === null || item.price === '' ? null : Number(item.price);
+    var stock = item.stock === null || item.stock === '' ? null : Number(item.stock);
+    return {
+      barcode: String(item.barcode || '').slice(0, 80),
+      name: String(item.name || '').trim().slice(0, 250),
+      price: isFinite(price) && price >= 0 ? price : null,
+      updated: item.updated ? String(item.updated).slice(0, 100) : null,
+      stock: isFinite(stock) ? stock : null,
+      sheet: String(item.sheet || '').slice(0, 100),
+      qty: Math.max(1, Math.min(9999, Math.round(Number(item.qty) || 1)))
+    };
+  }).filter(Boolean);
+}
+
+function applyCloudBasketState(state) {
+  basketCloudApplying = true;
+  try {
+    basket = sanitizeCloudBasketItems(state && state.items);
+    writeStore('teknikelCurrentBasket', basket);
+    applyDiscountValue(state && state.discount);
+    currentOfferNumber = '';
+    renderBasket();
+    updateBadge();
+  } finally {
+    basketCloudApplying = false;
+    basketCloudReady = true;
+  }
+}
+
+function mergeBasketCloudState(state) {
+  if (state && Array.isArray(state.items)) {
+    applyCloudBasketState(state);
+    return;
+  }
+  basketCloudReady = true;
+  if (basket.length) scheduleBasketCloudSync();
+}
+
+function scheduleBasketCloudSync() {
+  if (!basketCloudReady || basketCloudApplying || !signedInEmail || !isUsableCredential(googleIdToken)) return;
+  basketCloudSavePending = true;
+  clearTimeout(basketCloudSyncTimer);
+  basketCloudSyncTimer = setTimeout(saveBasketToCloud, 800);
+}
+
+async function saveBasketToCloud() {
+  if (!basketCloudReady || basketCloudApplying || !isUsableCredential(googleIdToken)) return;
+  if (basketCloudSaving) {
+    basketCloudSavePending = true;
+    return;
+  }
+  basketCloudSaving = true;
+  basketCloudSavePending = false;
+  var stateToSave = {
+    items: sanitizeCloudBasketItems(basket),
+    discount: Math.max(0, Math.min(100, Number(iskontoOrani) || 0))
+  };
+  try {
+    var response = await fetch(INVENTORY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({
+        idToken: googleIdToken,
+        action: 'saveBasketState',
+        basketState: stateToSave
+      }),
+      cache: 'no-store',
+      redirect: 'follow'
+    });
+    if (!response.ok) throw new Error('Sepet eşitleme servisi yanıt vermedi.');
+    var payload = await response.json();
+    if (!payload || !payload.ok) throw new Error(payload && payload.error ? payload.error : 'Sepet eşitlenemedi.');
+  } catch (error) {
+    console.warn('Sepet buluta kaydedilemedi:', error);
+  } finally {
+    basketCloudSaving = false;
+    if (basketCloudSavePending) scheduleBasketCloudSync();
+  }
 }
 
 function formatExchangeRate(value) {
@@ -541,6 +638,7 @@ function setIskonto(val, btn) {
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   renderBasket();
+  scheduleBasketCloudSync();
 }
 
 function setIskontoCustom(val) {
@@ -552,6 +650,7 @@ function setIskontoCustom(val) {
   iskontoOrani = n;
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   renderBasket();
+  scheduleBasketCloudSync();
 }
 
 function applyDiscountValue(value) {
@@ -565,6 +664,7 @@ function applyDiscountValue(value) {
   });
   document.getElementById('iskontoCustom').value = matched ? '' : discount;
   renderBasket();
+  scheduleBasketCloudSync();
 }
 
 const SHEETS = [
@@ -657,6 +757,7 @@ async function fetchSecureInventory() {
   if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
   const payload = await response.json();
   if (!payload || !payload.ok || !payload.sheets) throw new Error(payload && payload.error ? payload.error : 'Yetkilendirme başarısız.');
+  mergeBasketCloudState(payload.basketState);
   return SHEETS.map(function(cfg){ return mapSecureSheet(cfg, payload.sheets[cfg.name]); });
 }
 
@@ -2087,7 +2188,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.20').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.21').catch(function(){}); });
 }
 
 updateConnectionState();
