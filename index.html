@@ -223,7 +223,7 @@
         </div>
         <div class="isk-custom">
           <span>Özel oran</span>
-          <input type="number" id="iskontoCustom" min="0" max="100" placeholder="0" />
+          <input type="number" id="iskontoCustom" aria-label="Özel iskonto oranı" min="0" max="100" placeholder="0" />
           <span>%</span>
         </div>
       </section>
@@ -231,7 +231,7 @@
         <div class="empty-basket">Sepetiniz henüz boş<br><span style="font-size:11px">Sorgulama ekranından ürün ekleyebilirsiniz</span></div>
       </div>
       <div class="basket-save-row">
-        <input type="text" id="basketSaveName" placeholder="Sepet adı (örn. ABC Metal)">
+        <input type="text" id="basketSaveName" aria-label="Kaydedilecek sepet adı" placeholder="Sepet adı (örn. ABC Metal)">
         <button class="tool-btn" data-action="saveCurrentBasket">Kaydet</button>
       </div>
       <div class="basket-actions">
@@ -467,6 +467,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.15"></script>
+<script src="app.js?v=14.16"></script>
 </body>
 </html>
