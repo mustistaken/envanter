@@ -223,7 +223,7 @@ button { -webkit-tap-highlight-color: transparent; }
   min-height: 32px; padding: 6px 10px;
   border: 1px solid rgba(255,255,255,.18); border-radius: 999px;
   background: rgba(255,255,255,.1); color: #fff;
-  cursor: pointer; font-size: 9px; font-weight: 900;
+  cursor: pointer; font-size: 10px; font-weight: 900;
 }
 .refresh-btn.loading { pointer-events: none; opacity: .68; }
 .add-product-btn {
@@ -231,7 +231,7 @@ button { -webkit-tap-highlight-color: transparent; }
   min-height: 32px; padding: 6px 11px;
   border: 1px solid rgba(85,230,166,.48); border-radius: 999px;
   background: rgba(22,162,106,.2); color: #d9ffed;
-  cursor: pointer; font-size: 9px; font-weight: 900;
+  cursor: pointer; font-size: 10px; font-weight: 900;
 }
 .add-product-btn:hover { background: rgba(22,162,106,.34); }
 .icon-tool-btn {
@@ -240,7 +240,16 @@ button { -webkit-tap-highlight-color: transparent; }
   background: rgba(255,255,255,.1); color: #fff;
   cursor: pointer; font-size: 14px; font-weight: 900;
 }
-.last-sync { max-width: 250px; color: rgba(255,255,255,.6); font-size: 8px; font-weight: 700; text-align: right; }
+.last-sync { max-width: 250px; color: rgba(255,255,255,.68); font-size: 10px; font-weight: 700; text-align: right; }
+.basket-sync-status {
+  display: inline-flex; align-items: center; min-height: 24px; padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,.16); border-radius: 999px;
+  background: rgba(255,255,255,.08); color: rgba(255,255,255,.78);
+  font-size: 9px; font-weight: 800;
+}
+.basket-sync-status.is-syncing { color: #d9efff; }
+.basket-sync-status.is-saved { color: #c9ffe5; border-color: rgba(83,221,162,.28); }
+.basket-sync-status.is-error { color: #ffd3cf; border-color: rgba(255,127,115,.36); }
 .magmaweld-logo {
   display: block;
   width: 190px;
@@ -286,9 +295,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .overview-card--warning::before { background: var(--amber-400); }
 .overview-card--sync::before { background: var(--green-500); }
 .overview-card--rates::before { background: #7c5ce7; }
-.overview-card span { color: var(--ink-500); font-size: 8px; font-weight: 900; letter-spacing: .11em; }
+.overview-card span { color: var(--ink-500); font-size: 10px; font-weight: 900; letter-spacing: .09em; }
 .overview-card strong { margin: 7px 0 4px; color: var(--navy-900); font-size: 20px; line-height: 1.05; letter-spacing: -.035em; }
-.overview-card small { color: var(--ink-500); font-size: 8px; line-height: 1.35; }
+.overview-card small { color: var(--ink-500); font-size: 10px; line-height: 1.4; }
 .exchange-rates { display: grid; gap: 5px; margin: 7px 0 5px; }
 .exchange-rates strong {
   display: flex; align-items: center; gap: 6px; margin: 0;
@@ -300,6 +309,7 @@ button { -webkit-tap-highlight-color: transparent; }
   font-size: 10px;
 }
 .mobile-basket-summary { display: none; }
+.mobile-search-dock { display: none; }
 .card, .iskonto-sec {
   margin-bottom: 12px; padding: 20px;
   border: 1px solid var(--line); border-radius: 20px;
@@ -317,23 +327,21 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .label, .field-label { display: block; margin-bottom: 9px; color: var(--ink-700); font-size: 11px; font-weight: 900; letter-spacing: .06em; }
 .input-row { display: flex; gap: 9px; }
-.filter-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 10px; }
+.filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .category-select {
   min-width: 0; height: 42px; padding: 0 12px;
   border: 1.5px solid #cfdae7; border-radius: 12px;
   background: #f8fbfe; color: var(--ink-700); outline: none;
   font-size: 12px; font-weight: 800;
 }
-.filter-note {
-  display: inline-flex; align-items: center; padding: 0 11px;
-  border-radius: 12px; background: #edf6ff; color: #3970a5;
-  font-size: 10px; font-weight: 800;
-}
 .advanced-filter { margin-top: 10px; border-top: 1px solid #e8eef5; padding-top: 10px; }
 .advanced-filter summary { color: var(--blue-600); cursor: pointer; font-size: 10px; font-weight: 900; }
 .advanced-filter-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr auto; gap: 7px; margin-top: 10px; }
 .advanced-filter-grid input { width: 100%; height: 42px; padding: 0 10px; border-radius: 12px; font-size: 11px; }
-.stock-alert-card { border-color: #f1d9a2; background: linear-gradient(145deg,#fff,#fffaf0); }
+.stock-alert-card { border-color: #f1d9a2; background: linear-gradient(145deg,#fff,#fffaf0); transition: padding .18s ease; }
+.stock-alert-card.is-empty { padding-block: 13px; }
+.stock-alert-card.is-empty .quick-head { margin-bottom: 0; }
+.stock-alert-card.is-empty .critical-stock-list { display: none; }
 .critical-count { padding: 5px 8px; border-radius: 999px; background: #fff1d2; color: #9a6500 !important; }
 .critical-stock-list { display: grid; gap: 7px; max-height: 190px; overflow-y: auto; }
 .critical-stock-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 9px 10px; border: 1px solid #f1e1bd; border-radius: 11px; background: #fff; }
@@ -419,7 +427,7 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
 .quick-card { margin-bottom: 12px; padding: 16px 18px; }
 .quick-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .quick-head strong { font-size: 12px; }
-.quick-head span { color: var(--ink-500); font-size: 9px; font-weight: 800; }
+.quick-head span { color: var(--ink-500); font-size: 10px; font-weight: 800; }
 .chip-list { display: flex; flex-wrap: wrap; gap: 7px; }
 .product-chip {
   max-width: 100%; padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -642,6 +650,8 @@ body.dark #resPrice { background: #102b3c !important; }
 body.dark .stock-alert-card { background: #1f1d17; border-color: #5c4821; }
 body.dark .critical-stock-row { background: #171f28; border-color: #564724; }
 body.dark .tool-btn, body.dark .qty-btn, body.dark .favorite-btn { background: #142437; color: var(--ink-700); border-color: #2a4057; }
+body.dark .mobile-search-dock { background: rgba(16,29,44,.97); border-color: #2a4057; }
+body.dark .mobile-search-dock input { color: var(--ink-900); }
 .pulse-result { animation: resultPulse .28s ease; }
 .skeleton-line { display: inline-block; width: 130px; height: 10px; border-radius: 999px; background: linear-gradient(90deg,#e5ebf2 25%,#f7f9fb 50%,#e5ebf2 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -682,7 +692,8 @@ body.dark .tool-btn, body.dark .qty-btn, body.dark .favorite-btn { background: #
   .refresh-btn { min-height: 29px; padding: 5px 8px; }
   .add-product-btn { width: 29px; min-height: 29px; padding: 0; font-size: 0; }
   .add-product-btn::before { content: "＋"; font-size: 17px; line-height: 1; }
-  .last-sync { max-width: 155px; font-size: 7px; }
+  .last-sync { max-width: 155px; font-size: 9px; }
+  .basket-sync-status { min-height: 22px; padding: 3px 7px; font-size: 8px; }
   .install-btn { display: none !important; }
   .utility-menu .account-btn span { display: inline; }
   .utility-menu-panel { position: fixed; top: 76px; right: 14px; }
@@ -691,6 +702,20 @@ body.dark .tool-btn, body.dark .qty-btn, body.dark .favorite-btn { background: #
   .overview-card--sync { grid-column: auto; min-height: 104px; }
   .overview-card strong { font-size: 18px; }
   .exchange-rates strong { font-size: 13px; }
+  .mobile-search-dock.visible {
+    position: fixed; top: 10px; left: 12px; right: 12px; z-index: 930;
+    display: flex; align-items: center; gap: 8px;
+    max-width: 650px; margin: 0 auto; padding: 7px 10px;
+    border: 1px solid rgba(207,218,231,.92); border-radius: 15px;
+    background: rgba(255,255,255,.96); box-shadow: 0 14px 34px rgba(7,20,38,.2);
+    backdrop-filter: blur(16px);
+  }
+  .mobile-search-dock > span { color: var(--blue-600); font-size: 20px; font-weight: 900; }
+  .mobile-search-dock input {
+    width: 100%; height: 38px; padding: 0 4px;
+    border: 0; outline: 0; background: transparent; color: var(--ink-900);
+    font-size: 13px; font-weight: 750;
+  }
   .mobile-basket-summary.visible {
     position: fixed; left: 16px; right: 16px; bottom: 82px; z-index: 940;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -719,7 +744,6 @@ body.dark .tool-btn, body.dark .qty-btn, body.dark .favorite-btn { background: #
   .form-field.full { grid-column: auto; }
   .offer-actions { grid-template-columns: 1fr; }
   .filter-row { grid-template-columns: 1fr 1fr; }
-  .filter-note { grid-column: 1 / -1; min-height: 34px; justify-content: center; }
   .advanced-filter-grid { grid-template-columns: 1fr 1fr; }
   .advanced-filter-grid select, .advanced-filter-grid .mini-btn { grid-column: 1 / -1; }
   .export-actions { grid-template-columns: 1fr; }
