@@ -219,15 +219,13 @@ function signOut() {
 
 function readStore(key, fallback) {
   try {
-    var raw = readSession(key);
-    if (!raw) return fallback;
-    var value = JSON.parse(raw);
+    var value = JSON.parse(localStorage.getItem(key));
     return value == null ? fallback : value;
   } catch (e) { return fallback; }
 }
 
 function writeStore(key, value) {
-  try { writeSession(key, value ? JSON.stringify(value) : ''); } catch (e) {}
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
 }
 
 function formatExchangeRate(value) {

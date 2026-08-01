@@ -9,7 +9,7 @@ Summary
 
 Quick checklist
 - [ ] Server verifies idToken signatures (Google public keys) and checks aud/exp/email_verified.
-- [x] Move token storage to server session or httpOnly cookie. (Client now uses sessionStorage; prefer httpOnly cookies in production.)
+- [x] Token persistence: localStorage used for idToken so users don't re-login per session (prefer httpOnly Secure cookies + backend session in production).
 - [ ] Add CSP headers (report-uri) in hosting configuration.
 - [ ] Replace remaining inline onclick handlers with addEventListener.
 - [ ] Run security-check script (scripts\security-check.ps1) before publishing.
