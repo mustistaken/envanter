@@ -248,6 +248,7 @@ function signOut() {
   // Clear scheduled expiry checks and remembered automatic sign-in.
   clearTokenExpiryCheck();
   writePersistentFlag(AUTO_SIGN_IN_KEY, false);
+  clearProductSnapshot();
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
 }
@@ -670,6 +671,54 @@ function updateOverviewStats() {
   if (productStat) productStat.textContent = products.length ? products.length.toLocaleString('tr-TR') : '—';
 }
 
+const PRODUCT_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+function productSnapshotKey() {
+  return 'teknikelProductSnapshot::' + (signedInEmail || 'signed-out');
+}
+
+function readProductSnapshot() {
+  try {
+    var raw = localStorage.getItem(productSnapshotKey());
+    if (!raw) return null;
+    var snapshot = JSON.parse(raw);
+    var syncedAtMs = Date.parse(snapshot && snapshot.syncedAt || '');
+    if (!snapshot || !Array.isArray(snapshot.products) || !snapshot.products.length ||
+        !isFinite(syncedAtMs) || Date.now() - syncedAtMs > PRODUCT_SNAPSHOT_MAX_AGE_MS) {
+      return null;
+    }
+    return snapshot;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeProductSnapshot(snapshot) {
+  try {
+    localStorage.setItem(productSnapshotKey(), JSON.stringify(snapshot));
+  } catch (e) {
+    // Quota or private-mode failures should never block live synchronization.
+  }
+}
+
+function clearProductSnapshot() {
+  try { localStorage.removeItem(productSnapshotKey()); } catch (e) {}
+}
+
+function applyProductSnapshot(snapshot, cached) {
+  products = snapshot.products;
+  applyPriceChanges();
+  populateCategories();
+  populateBrands();
+  renderCriticalStocks();
+  renderQuickLists();
+  updateOverviewStats();
+  setLastSync(snapshot.syncedAt, cached);
+  document.getElementById('infoBox').textContent = products.length + ' ürün ' +
+    (cached ? 'hazır. Güncel veri arka planda kontrol ediliyor…' : 'senkronize edildi.') +
+    (snapshot.failedCount ? ' ' + snapshot.failedCount + ' sayfa yüklenemedi.' : '');
+}
+
 async function loadData(manual) {
   if (isLoadingData) return;
   isLoadingData = true;
@@ -678,33 +727,44 @@ async function loadData(manual) {
   refreshBtn.textContent = '↻ Yenileniyor';
   var infoBoxEl = document.getElementById('infoBox');
   while (infoBoxEl.firstChild) infoBoxEl.removeChild(infoBoxEl.firstChild);
-  var sk = document.createElement('span'); sk.className = 'skeleton-line'; infoBoxEl.appendChild(sk);
+  var sk = document.createElement('span');
+  sk.className = 'skeleton-line';
+  infoBoxEl.appendChild(sk);
+
+  var cachedSnapshot = manual ? null : readProductSnapshot();
+  if (cachedSnapshot) applyProductSnapshot(cachedSnapshot, true);
+
   try {
     const results = await fetchSecureInventory();
     const failedCount = results.filter(function(result){ return result === null; }).length;
-    products = results.filter(Array.isArray).flat();
-    if (!products.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
-    applyPriceChanges();
-    var syncedAt = new Date().toISOString();
-    populateCategories();
-    populateBrands();
-    renderCriticalStocks();
-    renderQuickLists();
-    updateOverviewStats();
-    setLastSync(syncedAt, false);
-    document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.' +
-      (failedCount ? ' ' + failedCount + ' sayfa yüklenemedi.' : '');
+    const freshProducts = results.filter(Array.isArray).flat();
+    if (!freshProducts.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
+
+    var freshSnapshot = {
+      products: freshProducts,
+      syncedAt: new Date().toISOString(),
+      failedCount: failedCount
+    };
+    writeProductSnapshot(freshSnapshot);
+    applyProductSnapshot(freshSnapshot, false);
     if (manual) showToast('Ürün verileri yenilendi.');
   } catch(e) {
-    products = [];
-    populateCategories();
-    populateBrands();
-    renderCriticalStocks();
-    renderQuickLists();
-    updateOverviewStats();
-    document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
-    setLastSync('', false);
-    showToast('Güvenli ürün verisi alınamadı.');
+    if (cachedSnapshot) {
+      applyProductSnapshot(cachedSnapshot, true);
+      document.getElementById('infoBox').textContent =
+        cachedSnapshot.products.length + ' ürün hızlı önbellekten gösteriliyor. Güncel veri alınamadı.';
+      showToast('Güncelleme tamamlanamadı; son başarılı veriler gösteriliyor.');
+    } else {
+      products = [];
+      populateCategories();
+      populateBrands();
+      renderCriticalStocks();
+      renderQuickLists();
+      updateOverviewStats();
+      document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
+      setLastSync('', false);
+      showToast('Güvenli ürün verisi alınamadı.');
+    }
     if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(e.message || ''))) {
       showAuthGate(e.message + ' Lütfen yeniden giriş yapın.', true);
     }
@@ -2020,7 +2080,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.17').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.18').catch(function(){}); });
 }
 
 updateConnectionState();
