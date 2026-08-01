@@ -1,17 +1,21 @@
-Security recommendations for Teknikel Akıllı Envanter
+Security notes for Teknikel Akıllı Envanter
 
-Summary
-- Verify all Google idTokens (ID tokens / OAuth tokens) on the server side by checking the token signature and audience (client_id). Do NOT treat client-side JWT decoding as proof of authenticity.
-- Prefer httpOnly, Secure cookies or short-lived server-side sessions instead of storing long-lived tokens in localStorage.
-- Avoid inline JavaScript (onclick attributes). Use addEventListener and enable a strict Content-Security-Policy (no-unsafe-inline) where possible.
-- Sanitize any user-controlled HTML. Use escapeHtml() when inserting content via innerHTML. Prefer textContent when possible.
-- Keep service worker caching limited to app shell; do not cache sensitive API responses unless explicitly designed.
+Current protections
+- Google ID tokens are verified by the Apps Script API using Google's tokeninfo endpoint.
+- The API checks aud, exp and email_verified before returning inventory data.
+- Inventory access is enforced server-side with an allowlist; grantAccess and addProduct also require the administrator account.
+- The browser keeps the short-lived Google ID token in sessionStorage, not localStorage. Signing out removes it.
+- User-specific baskets, favorites and offer data are namespaced by signed-in email.
+- Inline HTML event handlers and dynamic executable code are not used.
+- Spreadsheet-bound text entered through addProduct is escaped when it begins with a formula marker.
+- The service worker caches only the static app shell; authenticated API responses are not cached.
 
-Quick checklist
-- [ ] Server verifies idToken signatures (Google public keys) and checks aud/exp/email_verified.
-- [x] Move token storage to server session or httpOnly cookie. (Client now uses sessionStorage; prefer httpOnly cookies in production.)
-- [ ] Add CSP headers (report-uri) in hosting configuration.
-- [ ] Replace remaining inline onclick handlers with addEventListener.
-- [ ] Run security-check script (scripts\security-check.ps1) before publishing.
-
-If you want, I can prepare server-side verification sample code (Node/Express, Python/Flask) — tell me your preferred language and I'll add an example.
+Publishing checklist
+- [x] Server verifies Google token aud/exp/email_verified.
+- [x] Server enforces inventory allowlist and administrator-only mutations.
+- [x] Token storage is limited to the browser session.
+- [x] Inline onclick handlers were replaced with addEventListener.
+- [x] User-entered product text is protected from spreadsheet formula injection.
+- [x] Run scripts\security-check.ps1 before publishing.
+- [ ] Consider moving authentication to an httpOnly, Secure server session if the site later moves away from static GitHub Pages hosting.
+- [ ] Add a tested Content-Security-Policy when the Google Identity, Apps Script, exchange-rate, barcode and print dependencies have been fully enumerated.
