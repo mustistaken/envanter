@@ -5,6 +5,7 @@ Current protections
 - The API checks aud, exp and email_verified before returning inventory data.
 - Inventory access is enforced server-side with an allowlist; grantAccess and addProduct also require the administrator account.
 - The browser keeps the short-lived Google ID token in sessionStorage, not localStorage. A non-sensitive preference flag enables Google Identity Services to restore the signed-in account automatically after reopening; explicit sign-out removes both.
+- A full-page OpenID Connect fallback is available for embedded browsers that cannot complete the Google Identity Services popup/FedCM flow. It uses cryptographically random state and nonce values stored only in sessionStorage, validates both on return, removes the URL fragment immediately, and sends the resulting ID token through the same server-side verification and allowlist checks.
 - User-specific favorites and offer data are namespaced by signed-in email. The current basket and discount are also synchronized through the authenticated Apps Script API, stored per authorized email in a hidden spreadsheet tab, and validated/capped server-side.
 - A user-scoped product snapshot (maximum age 12 hours) is stored locally only after successful authentication so the interface opens immediately while fresh data synchronizes in the background; explicit sign-out removes it.
 - Inline HTML event handlers and dynamic executable code are not used.
@@ -15,6 +16,7 @@ Publishing checklist
 - [x] Server verifies Google token aud/exp/email_verified.
 - [x] Server enforces inventory allowlist and administrator-only mutations.
 - [x] Token storage is limited to the browser session.
+- [x] Redirect sign-in validates state, nonce, audience, expiry and verified email before unlocking the app.
 - [x] Inline onclick handlers were replaced with addEventListener.
 - [x] User-entered product text is protected from spreadsheet formula injection.
 - [x] Cross-browser basket synchronization requires a verified, allowlisted Google account and stores only sanitized basket fields.
