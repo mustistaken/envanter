@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.8">
+<link rel="stylesheet" href="styles.css?v=14.9">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -34,7 +34,7 @@
         <p>Ürün, fiyat ve teklif hesabı tek ekranda.</p>
       </div>
       <div class="header-side">
-        <img class="magmaweld-logo" id="reloadLogo" src="magmaweld-logo.png" alt="Magmaweld — sayfayı yenile" width="360" height="74" decoding="async" role="button" tabindex="0" title="Sayfayı yenile">
+        <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld" width="360" height="74" decoding="async">
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
           <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
@@ -331,9 +331,17 @@
           <label for="newProductName">ÜRÜN ADI</label>
           <input type="text" id="newProductName" name="name" maxlength="250" required autocomplete="off" placeholder="Ürünün tam adını girin">
         </div>
-        <div class="form-field full">
-          <label for="newProductPrice">FİYAT (₺)</label>
-          <input type="number" id="newProductPrice" name="price" min="0" step="0.01" required inputmode="decimal" placeholder="0,00">
+        <div class="form-field">
+          <label for="newProductPrice">FİYAT TUTARI</label>
+          <input type="number" id="newProductPrice" name="price" min="0" step="0.0001" required inputmode="decimal" placeholder="0,0000">
+        </div>
+        <div class="form-field">
+          <label for="newProductCurrency">PARA BİRİMİ</label>
+          <select id="newProductCurrency" name="currency" onchange="updateAddProductCurrencyHint()" required>
+            <option value="TRY">TL (₺)</option>
+            <option value="EUR">Euro (€)</option>
+            <option value="USD">Dolar ($)</option>
+          </select>
         </div>
       </div>
       <div class="add-product-destination">
@@ -350,6 +358,7 @@
         </select>
       </div>
       <p class="add-product-sheet-hint" id="newProductSheetHint">Stok bilgisi Envanter sayfasına kaydedilir.</p>
+      <p class="add-product-currency-hint" id="newProductCurrencyHint">TL fiyatı doğrudan kaydedilir.</p>
       <div class="add-product-actions">
         <button class="product-cancel-btn" type="button" onclick="closeAddProductModal()">Vazgeç</button>
         <button class="product-save-btn" id="saveProductBtn" type="submit">＋ Ürünü kaydet</button>
@@ -458,6 +467,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.13"></script>
+<script src="app.js?v=14.9"></script>
 </body>
 </html>
