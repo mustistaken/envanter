@@ -80,7 +80,7 @@ function showAuthGate(message, isError) {
 }
 
 function isAdminAccount() {
-  return String(signedInEmail || '').toLowerCase() === ADMIN_EMAIL;
+  return String(signedInEmail || '').toLowerCase() === String(ADMIN_EMAIL || '').toLowerCase();
 }
 
 function applyRoleVisibility(email) {
@@ -1469,14 +1469,33 @@ function shareOffer() {
 function printOffer() {
   if (!basket.length) { showToast('PDF için sepete ürün ekleyin.'); return; }
   var text = escapeHtml(buildOfferText()).replace(/\n/g, '<br>');
-  var win = window.open('', '_blank');
-  if (!win) { showToast('Yazdırma penceresi açılamadı.'); return; }
-  win.document.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
-    '<style>body{font-family:Arial,sans-serif;color:#142033;padding:72px 24px 40px;line-height:1.6;background:#f4f7fb}.back-btn{position:fixed;top:14px;left:14px;z-index:10;display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #cbd9e8;border-radius:999px;background:#fff;color:#12345a;box-shadow:0 8px 22px rgba(18,52,90,.14);font-weight:700;cursor:pointer}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px;margin:0 auto;background:#fff}h1{color:#12345a;margin:0 0 20px}small{color:#718099}@media print{body{padding:0;background:#fff}.back-btn{display:none}.box{border:0;padding:0;max-width:none}}</style></head>' +
-    '<body><button class="back-btn" type="button" onclick="window.close()" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
-    '</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); }, 200);
+  var win = null;
+  var objectUrl = null;
+  try {
+    var html = '<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
+      '<style>body{font-family:Arial,sans-serif;color:#142033;padding:72px 24px 40px;line-height:1.6;background:#f4f7fb}.back-btn{position:fixed;top:14px;left:14px;z-index:10;display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #cbd9e8;border-radius:999px;background:#fff;color:#12345a;box-shadow:0 8px 22px rgba(18,52,90,.14);font-weight:700;cursor:pointer}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px;margin:0 auto;background:#fff}h1{color:#12345a;margin:0 0 20px}small{color:#718099}@media print{body{padding:0;background:#fff}.back-btn{display:none}.box{border:0;padding:0;max-width:none}}</style></head>' +
+      '<body><button class="back-btn" type="button" onclick="window.close()" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
+      '</body></html>';
+
+    var blob = new Blob([html], { type: 'text/html' });
+    objectUrl = URL.createObjectURL(blob);
+    win = window.open(objectUrl, '_blank', 'noopener');
+    if (!win) { showToast('Yazdırma penceresi açılamadı.'); URL.revokeObjectURL(objectUrl); return; }
+
+    // Try to print when the new window loads, with fallbacks
+    try {
+      if (win.addEventListener) {
+        win.addEventListener('load', function() { setTimeout(function(){ try{ win.print(); } catch(e){} }, 200); }, { once: true });
+      }
+    } catch (e) {}
+
+    // Fallback attempt after a short delay
+    setTimeout(function(){ try{ win.print(); } catch(e){}; setTimeout(function(){ if (objectUrl) URL.revokeObjectURL(objectUrl); }, 1000); }, 500);
+  } catch (err) {
+    if (win && win.close) try { win.close(); } catch (e) {}
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    showToast('Yazdırma sırasında hata: ' + (err && err.message || err));
+  }
 }
 
 function openAdminModal() {
@@ -1679,6 +1698,33 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
     stopCam();
   } finally {
     scanButton.disabled = false;
+  }
+});
+
+// Bind simple onclick attributes (no-argument calls) to addEventListener and remove inline onclicks.
+(function bindSimpleOnclicks(){
+  try {
+    var elements = document.querySelectorAll('[onclick]');
+    elements.forEach(function(el){
+      var attr = el.getAttribute('onclick') || '';
+      var m = attr.match(/^\s*([A-Za-z0-9_$]+)\s*\(\s*\)\s*;?\s*$/);
+      if (!m) return; // skip calls with arguments
+      var fnName = m[1];
+      var fn = window[fnName];
+      if (typeof fn !== 'function') return;
+      // Avoid duplicating listeners
+      var marker = 'data-bound-' + fnName;
+      if (el.hasAttribute(marker)) return;
+      el.addEventListener('click', function(e){
+        try { fn.call(this, e); } catch (err) { console.error('bound click error', err); }
+      });
+      el.setAttribute(marker, '1');
+      // Remove inline onclick to improve CSP compatibility
+      el.removeAttribute('onclick');
+    });
+  } catch (e) { console.warn('bindSimpleOnclicks failed', e); }
+})();
+
   }
 });
 
