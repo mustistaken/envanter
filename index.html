@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.23">
+<link rel="stylesheet" href="styles.css?v=14.24">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -21,6 +21,11 @@
     <h1 id="authTitle">Teknikel Akıllı Envanter</h1>
     <p>Ürün, stok ve fiyat bilgilerini görüntülemek için yetkili Google hesabınızla giriş yapın.</p>
     <div id="googleSignInButton" class="google-signin"></div>
+    <div class="auth-alternative" aria-hidden="true"><span>veya</span></div>
+    <button class="redirect-signin-btn" type="button" data-action="startRedirectSignIn">
+      <strong>Google ile yönlendirmeli giriş</strong>
+      <small>Giriş penceresi açılmayan tarayıcılar için</small>
+    </button>
     <p class="auth-status" id="authStatus" role="status">Google giriş sistemi hazırlanıyor…</p>
   </div>
 </section>
@@ -472,6 +477,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.23"></script>
+<script src="app.js?v=14.24"></script>
 </body>
 </html>
