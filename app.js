@@ -28,13 +28,13 @@ const EXCHANGE_RATE_URLS = {
 };
 
 function readSession(key) {
-  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
 }
 
 function writeSession(key, value) {
   try {
-    if (value) sessionStorage.setItem(key, value);
-    else sessionStorage.removeItem(key);
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch (e) {}
 }
 
@@ -120,7 +120,9 @@ function renderGoogleSignIn() {
   google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: handleGoogleCredential,
-    auto_select: false,
+    auto_select: true,
+    use_fedcm_for_button: true,
+    button_auto_select: true,
     cancel_on_tap_outside: false
   });
   google.accounts.id.renderButton(document.getElementById('googleSignInButton'), {
@@ -142,8 +144,12 @@ function initializeAuth() {
     if (renderGoogleSignIn()) {
       clearInterval(timer);
       var storedToken = readSession(AUTH_TOKEN_KEY);
-      if (isUsableCredential(storedToken)) unlockApp(storedToken);
-      else showAuthGate('Yetkili Google hesabınızla giriş yapın.', false);
+      if (isUsableCredential(storedToken)) {
+        unlockApp(storedToken);
+      } else {
+        showAuthGate('Kayıtlı Google hesabınız doğrulanıyor…', false);
+        google.accounts.id.prompt();
+      }
     } else if (attempts >= 80) {
       clearInterval(timer);
       showAuthGate('Google giriş sistemi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.', true);
@@ -1699,7 +1705,7 @@ if (reloadLogo) {
 }
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.9').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.10').catch(function(){}); });
 }
 
 updateConnectionState();
