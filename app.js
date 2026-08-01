@@ -65,6 +65,8 @@ function setAuthStatus(message, isError) {
 }
 
 function showAuthGate(message, isError) {
+  // Clear any scheduled expiry checks
+  clearTokenExpiryCheck();
   googleIdToken = '';
   signedInEmail = '';
   writeSession(AUTH_TOKEN_KEY, '');
@@ -101,7 +103,39 @@ function unlockApp(token) {
   applyRoleVisibility(payload && payload.email ? payload.email : '');
   loadData();
   loadExchangeRates();
+  // Schedule automatic sign-out based on token expiry
+  scheduleTokenExpiryCheck();
 }
+
+// Token expiry handling: schedules a sign-out when the current token expires (with small buffer).
+var _tokenExpiryTimer = null;
+function clearTokenExpiryCheck() {
+  try { if (_tokenExpiryTimer) { clearTimeout(_tokenExpiryTimer); _tokenExpiryTimer = null; } } catch (e) {}
+}
+function scheduleTokenExpiryCheck() {
+  try {
+    clearTokenExpiryCheck();
+    if (!googleIdToken) return;
+    var payload = decodeGoogleCredential(googleIdToken);
+    if (!payload || !payload.exp) return;
+    var expiresAt = Number(payload.exp) * 1000;
+    // Sign out 10 seconds before expiry to avoid races
+    var ms = expiresAt - Date.now() - 10000;
+    if (ms <= 0) {
+      // Already expired or too close
+      showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+      return;
+    }
+    _tokenExpiryTimer = setTimeout(function() {
+      try {
+        showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+      } catch (e) { console.error('token expiry handler', e); }
+    }, ms);
+  } catch (e) { console.error('scheduleTokenExpiryCheck', e); }
+}
+// Re-check on page focus/visibility to handle clocks and suspended timers
+window.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') scheduleTokenExpiryCheck(); });
+window.addEventListener('focus', function(){ scheduleTokenExpiryCheck(); });
 
 function handleGoogleCredential(response) {
   var token = response && response.credential ? response.credential : '';
@@ -175,6 +209,8 @@ function openLocalDesignPreview() {
 }
 
 function signOut() {
+  // Clear scheduled expiry checks and sign out
+  clearTokenExpiryCheck();
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
 }
