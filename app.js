@@ -28,13 +28,13 @@ const EXCHANGE_RATE_URLS = {
 };
 
 function readSession(key) {
-  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
+  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
 }
 
 function writeSession(key, value) {
   try {
-    if (value) sessionStorage.setItem(key, value);
-    else sessionStorage.removeItem(key);
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch (e) {}
 }
 
@@ -1734,7 +1734,7 @@ if (reloadLogo) {
 }
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.12').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.13').catch(function(){}); });
 }
 
 updateConnectionState();
