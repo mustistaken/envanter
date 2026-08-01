@@ -169,7 +169,14 @@ function requestAutomaticSignIn() {
   if (!readPersistentFlag(AUTO_SIGN_IN_KEY)) return false;
   if (!window.google || !google.accounts || !google.accounts.id) return false;
   setAuthStatus('Google oturumunuz geri yükleniyor…', false);
-  google.accounts.id.prompt();
+  google.accounts.id.prompt(function(notification) {
+    var unavailable = notification &&
+      ((notification.isNotDisplayed && notification.isNotDisplayed()) ||
+       (notification.isSkippedMoment && notification.isSkippedMoment()));
+    if (unavailable) {
+      setAuthStatus('Otomatik giriş kullanılamadı. Google ile giriş düğmesine basın.', false);
+    }
+  });
   return true;
 }
 
@@ -182,9 +189,9 @@ function renderGoogleSignIn() {
     auto_select: readPersistentFlag(AUTO_SIGN_IN_KEY),
     cancel_on_tap_outside: false,
     itp_support: true,
-    use_fedcm_for_prompt: true,
-    use_fedcm_for_button: true,
-    button_auto_select: true
+    use_fedcm_for_prompt: false,
+    use_fedcm_for_button: false,
+    button_auto_select: false
   });
   google.accounts.id.renderButton(document.getElementById('googleSignInButton'), {
     type: 'standard',
@@ -2080,7 +2087,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.18').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.19').catch(function(){}); });
 }
 
 updateConnectionState();
