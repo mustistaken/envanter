@@ -540,11 +540,12 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
 .form-field { display: grid; gap: 6px; }
 .form-field.full { grid-column: 1 / -1; }
 .form-field label { color: var(--ink-700); font-size: 10px; font-weight: 900; }
-.form-field input, .form-field textarea {
+.form-field input, .form-field textarea, .form-field select {
   width: 100%; border: 1.5px solid #cfdae7; border-radius: 12px;
   background: #f8fbfe; color: var(--ink-900); outline: none;
 }
 .form-field input { height: 44px; padding: 0 12px; }
+.form-field select { height: 44px; padding: 0 34px 0 12px; font-size: 12px; font-weight: 800; }
 .form-field textarea { min-height: 82px; padding: 11px 12px; resize: vertical; }
 .add-product-modal-card { width: min(100%, 500px); }
 .add-product-destination {
@@ -559,6 +560,10 @@ input:focus { border-color: var(--blue-500); background: #fff; box-shadow: 0 0 0
   background-color: #fff; color: var(--ink-700); font-size: 11px; font-weight: 800;
 }
 .add-product-sheet-hint { margin: 7px 2px 0; color: var(--ink-500); font-size: 9px; line-height: 1.45; }
+.add-product-currency-hint {
+  margin: 5px 2px 0; padding: 8px 10px; border-radius: 9px;
+  background: #eef7ff; color: var(--blue-600); font-size: 9px; font-weight: 750; line-height: 1.45;
+}
 .form-field.is-disabled { opacity: .55; }
 .form-field input:disabled { cursor: not-allowed; }
 .add-product-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; margin-top: 14px; }
@@ -628,6 +633,7 @@ body.dark .result-meta { border-color: #26394d; }
 body.dark .search-card input, body.dark select, body.dark input, body.dark textarea,
 body.dark .detail-grid div, body.dark .saved-row, body.dark .admin-action { background: #142437; color: var(--ink-900); border-color: #2a4057; }
 body.dark .add-product-destination { background: #142437; border-color: #2a4057; }
+body.dark .add-product-currency-hint { background: #142b41; color: #8fc2ff; }
 body.dark .product-cancel-btn { background: #1c3045; color: var(--ink-700); }
 body.dark .access-note { background: #142b41; }
 body.dark .res-table th, body.dark .update-row, body.dark .suggestions, body.dark .sug-item,
