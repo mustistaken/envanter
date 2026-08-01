@@ -94,6 +94,8 @@ function showAuthGate(message, isError) {
     sessionStorage.removeItem('teknikelCacheTime');
   } catch (e) {}
   document.body.classList.add('auth-pending');
+  var mobileSearchDock = document.getElementById('mobileSearchDock');
+  if (mobileSearchDock) mobileSearchDock.classList.remove('visible');
   document.getElementById('appShell').setAttribute('aria-hidden', 'true');
   document.getElementById('authGate').removeAttribute('aria-hidden');
   setAuthStatus(message || 'Yetkili Google hesabınızla giriş yapın.', isError);
@@ -315,6 +317,7 @@ function resetUserStoresInMemory() {
   basketCloudApplying = false;
   basketCloudSaving = false;
   basketCloudSavePending = false;
+  setBasketCloudStatus('Sepet bekleniyor', 'idle');
   basket = [];
   favorites = [];
   recentProducts = [];
@@ -341,6 +344,13 @@ function loadUserStores() {
   renderOfferHistory();
   renderQuickLists();
   renderCustomerProfiles();
+}
+
+function setBasketCloudStatus(message, state) {
+  var element = document.getElementById('basketSyncStatus');
+  if (!element) return;
+  element.textContent = '☁ ' + message;
+  element.className = 'basket-sync-status is-' + (state || 'idle');
 }
 
 function sanitizeCloudBasketItems(items) {
@@ -373,6 +383,7 @@ function applyCloudBasketState(state) {
   } finally {
     basketCloudApplying = false;
     basketCloudReady = true;
+    setBasketCloudStatus('Sepet eşitlendi', 'saved');
   }
 }
 
@@ -383,11 +394,13 @@ function mergeBasketCloudState(state) {
   }
   basketCloudReady = true;
   if (basket.length) scheduleBasketCloudSync();
+  else setBasketCloudStatus('Sepet hazır', 'saved');
 }
 
 function scheduleBasketCloudSync() {
   if (!basketCloudReady || basketCloudApplying || !signedInEmail || !isUsableCredential(googleIdToken)) return;
   basketCloudSavePending = true;
+  setBasketCloudStatus('Sepet eşitleniyor…', 'syncing');
   clearTimeout(basketCloudSyncTimer);
   basketCloudSyncTimer = setTimeout(saveBasketToCloud, 800);
 }
@@ -400,6 +413,7 @@ async function saveBasketToCloud() {
   }
   basketCloudSaving = true;
   basketCloudSavePending = false;
+  setBasketCloudStatus('Sepet kaydediliyor…', 'syncing');
   var stateToSave = {
     items: sanitizeCloudBasketItems(basket),
     discount: Math.max(0, Math.min(100, Number(iskontoOrani) || 0))
@@ -419,7 +433,9 @@ async function saveBasketToCloud() {
     if (!response.ok) throw new Error('Sepet eşitleme servisi yanıt vermedi.');
     var payload = await response.json();
     if (!payload || !payload.ok) throw new Error(payload && payload.error ? payload.error : 'Sepet eşitlenemedi.');
+    setBasketCloudStatus('Sepet kaydedildi ✓', 'saved');
   } catch (error) {
+    setBasketCloudStatus('Sepet kaydedilemedi', 'error');
     console.warn('Sepet buluta kaydedilemedi:', error);
   } finally {
     basketCloudSaving = false;
@@ -1005,6 +1021,7 @@ async function submitAddProduct(event) {
     });
     if (added) {
       document.getElementById('searchInput').value = added.name;
+      document.getElementById('mobileSearchInput').value = added.name;
       showResult(added);
       addRecentProduct(added);
       showToast('Ürün ' + sheetName + ' sayfasına ' + currency + ' fiyatıyla eklendi ve liste yenilendi.');
@@ -1091,9 +1108,11 @@ function getPriceChangeText(product) {
 
 function renderCriticalStocks() {
   var list = document.getElementById('criticalStockList');
+  var card = document.getElementById('stockAlertCard');
   var critical = products.filter(function(product) {
     return product.stock !== null && product.stock !== undefined && Number(product.stock) <= 5;
   }).sort(function(a, b){ return Number(a.stock) - Number(b.stock); });
+  if (card) card.classList.toggle('is-empty', critical.length === 0);
   document.getElementById('criticalStockCount').textContent = critical.length ? critical.length + ' kritik ürün' : 'Kritik stok yok';
   var statEl = document.getElementById('statCriticalCount');
   if (statEl) statEl.textContent = critical.length ? critical.length + ' ürün' : 'Yok';
@@ -1247,6 +1266,7 @@ function selectProduct(idx) {
   var p = products[idx];
   if (p) {
     document.getElementById('searchInput').value = p.name;
+      document.getElementById('mobileSearchInput').value = p.name;
     var sugClearEl = document.getElementById('suggestions'); while (sugClearEl && sugClearEl.firstChild) sugClearEl.removeChild(sugClearEl.firstChild);
     showResult(p);
     addRecentProduct(p);
@@ -1302,6 +1322,7 @@ function openProductByKey(key) {
   var product = products.find(function(item){ return productKey(item) === key; });
   if (!product) { showToast('Ürün güncel listede bulunamadı.'); return; }
   document.getElementById('searchInput').value = product.name;
+      document.getElementById('mobileSearchInput').value = product.name;
   showResult(product);
   addRecentProduct(product);
   window.scrollTo({ top: document.querySelector('.search-card').offsetTop - 20, behavior: 'smooth' });
@@ -1471,6 +1492,7 @@ function addToBasket() {
   writeStore('teknikelCurrentBasket', basket);
   renderBasket(); updateBadge();
   document.getElementById('searchInput').value = '';
+      document.getElementById('mobileSearchInput').value = '';
   document.getElementById('qtyInput').value = 1;
   var sugClearEl = document.getElementById('suggestions'); while (sugClearEl && sugClearEl.firstChild) sugClearEl.removeChild(sugClearEl.firstChild);
   search('');
@@ -1986,17 +2008,35 @@ async function submitAccessGrant(event) {
   }
 }
 
+var systemThemeQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function normalizeTheme(theme) {
+  return ['system', 'light', 'dark'].indexOf(theme) !== -1 ? theme : 'system';
+}
+
 function applyTheme(theme) {
-  var dark = theme === 'dark';
-  document.body.classList.toggle('dark', dark);
-  document.getElementById('themeBtn').textContent = dark ? 'Açık temaya geç' : 'Koyu temaya geç';
-  document.getElementById('themeBtn').setAttribute('aria-label', dark ? 'Açık temayı aç' : 'Koyu temayı aç');
+  var selected = normalizeTheme(theme);
+  var dark = selected === 'dark' || (selected === 'system' && systemThemeQuery && systemThemeQuery.matches);
+  document.body.classList.toggle('dark', !!dark);
+  document.body.setAttribute('data-theme', selected);
+  var labels = { system: 'Otomatik', light: 'Açık', dark: 'Koyu' };
+  var button = document.getElementById('themeBtn');
+  button.textContent = 'Tema: ' + labels[selected];
+  button.setAttribute('aria-label', 'Tema modu: ' + labels[selected] + '. Değiştirmek için basın.');
 }
 
 function toggleTheme() {
-  var next = document.body.classList.contains('dark') ? 'light' : 'dark';
+  var order = ['system', 'light', 'dark'];
+  var current = normalizeTheme(readStore('teknikelTheme', 'system'));
+  var next = order[(order.indexOf(current) + 1) % order.length];
   writeStore('teknikelTheme', next);
   applyTheme(next);
+}
+
+if (systemThemeQuery && systemThemeQuery.addEventListener) {
+  systemThemeQuery.addEventListener('change', function() {
+    if (normalizeTheme(readStore('teknikelTheme', 'system')) === 'system') applyTheme('system');
+  });
 }
 
 function updateBadge() {
@@ -2015,14 +2055,41 @@ function showTab(tab) {
   tabs[1].className = 'tab ' + (tab === 'sepet' ? 'active' : 'inactive');
   tabs[0].setAttribute('aria-selected', tab === 'sorgu' ? 'true' : 'false');
   tabs[1].setAttribute('aria-selected', tab === 'sepet' ? 'true' : 'false');
+  updateMobileSearchDock();
 }
 
 var searchTimer = null;
-document.getElementById('searchInput').addEventListener('input', function(e){
+
+function queueProductSearch(value, sourceId) {
+  var mainInput = document.getElementById('searchInput');
+  var mobileInput = document.getElementById('mobileSearchInput');
+  if (sourceId !== 'searchInput' && mainInput.value !== value) mainInput.value = value;
+  if (sourceId !== 'mobileSearchInput' && mobileInput.value !== value) mobileInput.value = value;
   clearTimeout(searchTimer);
-  var value = e.target.value;
   searchTimer = setTimeout(function(){ search(value); }, 120);
+}
+
+document.getElementById('searchInput').addEventListener('input', function(e){
+  queueProductSearch(e.target.value, 'searchInput');
 });
+
+document.getElementById('mobileSearchInput').addEventListener('input', function(e){
+  queueProductSearch(e.target.value, 'mobileSearchInput');
+});
+
+function updateMobileSearchDock() {
+  var dock = document.getElementById('mobileSearchDock');
+  var mainInput = document.getElementById('searchInput');
+  var queryTab = document.getElementById('tab-sorgu');
+  var mobile = window.matchMedia && window.matchMedia('(max-width: 560px)').matches;
+  var appReady = !document.body.classList.contains('auth-pending');
+  var queryVisible = queryTab && queryTab.style.display !== 'none';
+  var show = mobile && appReady && queryVisible && mainInput.getBoundingClientRect().bottom < 0;
+  dock.classList.toggle('visible', !!show);
+}
+
+window.addEventListener('scroll', updateMobileSearchDock, { passive: true });
+window.addEventListener('resize', updateMobileSearchDock);
 ['categoryFilter', 'brandFilter', 'stockFilter', 'minPriceFilter', 'maxPriceFilter'].forEach(function(id) {
   var eventName = id.includes('Price') ? 'input' : 'change';
   document.getElementById(id).addEventListener(eventName, function(){
@@ -2101,6 +2168,7 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
         if (result) {
           var val = result.getText().trim();
           document.getElementById('searchInput').value = val;
+      document.getElementById('mobileSearchInput').value = val;
           search(val);
           if (navigator.vibrate) navigator.vibrate(90);
           showToast('Barkod okundu.');
@@ -2188,11 +2256,11 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.22').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.23').catch(function(){}); });
 }
 
 updateConnectionState();
-applyTheme(readStore('teknikelTheme', 'light'));
+applyTheme(readStore('teknikelTheme', 'system'));
 renderBasket();
 updateBadge();
 renderSavedBaskets();
