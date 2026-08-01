@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.9">
+<link rel="stylesheet" href="styles.css?v=14.23">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -42,7 +42,7 @@
           <details class="utility-menu">
             <summary aria-label="Hesap ve ayarlar">•••</summary>
             <div class="utility-menu-panel">
-              <button class="utility-action" id="themeBtn" data-action="toggleTheme">Tema değiştir</button>
+              <button class="utility-action" id="themeBtn" data-action="toggleTheme">Tema: Otomatik</button>
               <button class="utility-action" id="adminCenterBtn" data-action="openAdminModal">Yönetim merkezi</button>
               <button class="utility-action account-btn" id="accountBtn" data-action="signOut" title="Google oturumunu kapat">
                 <span id="accountEmail">Google hesabı</span> · Çıkış
@@ -52,6 +52,7 @@
           </details>
         </div>
         <span class="last-sync" id="lastSyncText">Son veri kontrolü bekleniyor</span>
+        <span class="basket-sync-status is-idle" id="basketSyncStatus" role="status" aria-live="polite">☁ Sepet bekleniyor</span>
       </div>
     </div>
   </header>
@@ -91,6 +92,11 @@
     <span><small>SEPET</small><strong id="mobileBasketItems">0 ürün</strong></span>
     <strong id="mobileBasketTotal">0,00 ₺</strong>
   </button>
+
+  <div class="mobile-search-dock" id="mobileSearchDock" aria-label="Sabit ürün araması">
+    <span aria-hidden="true">⌕</span>
+    <input type="search" id="mobileSearchInput" placeholder="Ürün adı veya barkod..." autocomplete="off" aria-label="Sabit ürün araması">
+  </div>
 
   <main>
     <div id="tab-sorgu" role="tabpanel" aria-labelledby="sorguTab">
@@ -466,6 +472,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.22"></script>
+<script src="app.js?v=14.23"></script>
 </body>
 </html>
