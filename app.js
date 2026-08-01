@@ -28,13 +28,13 @@ const EXCHANGE_RATE_URLS = {
 };
 
 function readSession(key) {
-  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
 }
 
 function writeSession(key, value) {
   try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
   } catch (e) {}
 }
 
@@ -69,6 +69,10 @@ function showAuthGate(message, isError) {
   signedInEmail = '';
   writeSession(AUTH_TOKEN_KEY, '');
   products = [];
+  try {
+    localStorage.removeItem('teknikelCachedProducts');
+    localStorage.removeItem('teknikelCacheTime');
+  } catch (e) {}
   document.body.classList.add('auth-pending');
   document.getElementById('appShell').setAttribute('aria-hidden', 'true');
   document.getElementById('authGate').removeAttribute('aria-hidden');
@@ -95,7 +99,6 @@ function unlockApp(token) {
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
   applyRoleVisibility(payload && payload.email ? payload.email : '');
-  restoreCachedProducts();
   loadData();
   loadExchangeRates();
 }
@@ -535,44 +538,13 @@ function updateOverviewStats() {
   if (productStat) productStat.textContent = products.length ? products.length.toLocaleString('tr-TR') : '—';
 }
 
-function restoreCachedProducts() {
-  var cachedProducts = readStore('teknikelCachedProducts', []);
-  var cachedAt = Number(readStore('teknikelCacheTime', 0));
-  var maxAge = 24 * 60 * 60 * 1000;
-  if (!Array.isArray(cachedProducts) || !cachedProducts.length ||
-      !cachedAt || Date.now() - cachedAt > maxAge) {
-    return false;
-  }
-
-  products = cachedProducts;
-  populateCategories();
-  populateBrands();
-  renderCriticalStocks();
-  renderQuickLists();
-  updateOverviewStats();
-  setLastSync(new Date(cachedAt).toISOString(), true);
-  document.getElementById('infoBox').textContent =
-    products.length + ' ürün son kayıttan gösteriliyor. Güncel veri arka planda kontrol ediliyor…';
-  return true;
-}
-
-function saveProductCache() {
-  writeStore('teknikelCachedProducts', products);
-  writeStore('teknikelCacheTime', Date.now());
-}
-
 async function loadData(manual) {
   if (isLoadingData) return;
   isLoadingData = true;
   var refreshBtn = document.getElementById('refreshDataBtn');
   refreshBtn.classList.add('loading');
   refreshBtn.textContent = '↻ Yenileniyor';
-  if (products.length) {
-    document.getElementById('infoBox').textContent =
-      products.length + ' ürün hazır. Güncel veri arka planda kontrol ediliyor…';
-  } else {
-    document.getElementById('infoBox').innerHTML = '<span class="skeleton-line"></span>';
-  }
+  document.getElementById('infoBox').innerHTML = '<span class="skeleton-line"></span>';
   try {
     const results = await fetchSecureInventory();
     const failedCount = results.filter(function(result){ return result === null; }).length;
@@ -586,26 +558,19 @@ async function loadData(manual) {
     renderQuickLists();
     updateOverviewStats();
     setLastSync(syncedAt, false);
-    saveProductCache();
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.' +
       (failedCount ? ' ' + failedCount + ' sayfa yüklenemedi.' : '');
     if (manual) showToast('Ürün verileri yenilendi.');
   } catch(e) {
-    if (!products.length) {
-      products = [];
-      populateCategories();
-      populateBrands();
-      renderCriticalStocks();
-      renderQuickLists();
-      updateOverviewStats();
-      document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
-      setLastSync('', false);
-      showToast('Güvenli ürün verisi alınamadı.');
-    } else {
-      document.getElementById('infoBox').textContent =
-        products.length + ' ürün son kayıttan gösteriliyor. Canlı senkronizasyon gecikti.';
-      showToast('Son kayıt gösteriliyor; güncel veri bağlantısı gecikti.');
-    }
+    products = [];
+    populateCategories();
+    populateBrands();
+    renderCriticalStocks();
+    renderQuickLists();
+    updateOverviewStats();
+    document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
+    setLastSync('', false);
+    showToast('Güvenli ürün verisi alınamadı.');
     if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(e.message || ''))) {
       showAuthGate(e.message + ' Lütfen yeniden giriş yapın.', true);
     }
@@ -642,14 +607,39 @@ function updateAddProductSheetFields() {
   var stockInput = document.getElementById('newProductStock');
   var stockField = document.getElementById('newProductStockField');
   var hint = document.getElementById('newProductSheetHint');
+  var currencySelect = document.getElementById('newProductCurrency');
   var supportsStock = sheetName === 'Envanter';
+  var defaultCurrencies = {
+    'Envanter': 'TRY',
+    'Trafimet': 'EUR',
+    'MW Torç ve Sarfları': 'USD',
+    'MW Kaynak Makinaları': 'USD',
+    'Kaynak Tamamlayıcı Ürünler': 'USD',
+    'Özlü Teller': 'USD',
+    'Örtülü Elektrodlar': 'TRY',
+    'MIG-MAG ve TIG Telleri': 'TRY'
+  };
 
   stockInput.disabled = !supportsStock;
   stockInput.required = supportsStock;
   stockField.classList.toggle('is-disabled', !supportsStock);
+  currencySelect.value = defaultCurrencies[sheetName] || 'TRY';
   hint.textContent = supportsStock
     ? 'Stok bilgisi Envanter sayfasına kaydedilir.'
     : 'Bu sayfada stok sütunu yoktur; ürün kodu, adı ve TL fiyatı kaydedilir.';
+  updateAddProductCurrencyHint();
+}
+
+function updateAddProductCurrencyHint() {
+  var currency = document.getElementById('newProductCurrency').value;
+  var hint = document.getElementById('newProductCurrencyHint');
+  if (currency === 'EUR') {
+    hint.textContent = 'Euro tutarı kaydedilir; sitedeki TL fiyatı güncel EUR/TRY kuruyla otomatik hesaplanır.';
+  } else if (currency === 'USD') {
+    hint.textContent = 'Dolar tutarı kaydedilir; sitedeki TL fiyatı güncel USD/TRY kuruyla otomatik hesaplanır.';
+  } else {
+    hint.textContent = 'TL fiyatı doğrudan kaydedilir.';
+  }
 }
 
 async function submitAddProduct(event) {
@@ -666,12 +656,14 @@ async function submitAddProduct(event) {
   var saveBtn = document.getElementById('saveProductBtn');
   var sheetName = document.getElementById('newProductSheet').value;
   var stockInput = document.getElementById('newProductStock');
+  var currency = document.getElementById('newProductCurrency').value;
   var product = {
     code: document.getElementById('newProductCode').value.trim(),
     name: document.getElementById('newProductName').value.trim(),
     price: Number(document.getElementById('newProductPrice').value),
     stock: stockInput.disabled ? null : Number(stockInput.value),
-    sheet: sheetName
+    sheet: sheetName,
+    currency: currency
   };
 
   saveBtn.disabled = true;
@@ -704,9 +696,9 @@ async function submitAddProduct(event) {
       document.getElementById('searchInput').value = added.name;
       showResult(added);
       addRecentProduct(added);
-      showToast('Ürün ' + sheetName + ' sayfasına eklendi ve liste yenilendi.');
+      showToast('Ürün ' + sheetName + ' sayfasına ' + currency + ' fiyatıyla eklendi ve liste yenilendi.');
     } else {
-      showToast('Ürün ' + sheetName + ' sayfasına eklendi. Listeyi yeniden yenileyin.');
+      showToast('Ürün ' + sheetName + ' sayfasına ' + currency + ' fiyatıyla eklendi. Listeyi yeniden yenileyin.');
     }
   } catch (error) {
     showToast(String(error && error.message || error));
@@ -1719,22 +1711,8 @@ document.getElementById('installBtn').addEventListener('click', async function()
   this.style.display = 'none';
 });
 
-var reloadLogo = document.getElementById('reloadLogo');
-if (reloadLogo) {
-  function reloadFromLogo() {
-    window.location.reload();
-  }
-  reloadLogo.addEventListener('click', reloadFromLogo);
-  reloadLogo.addEventListener('keydown', function(event) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      reloadFromLogo();
-    }
-  });
-}
-
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.13').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.4').catch(function(){}); });
 }
 
 updateConnectionState();
