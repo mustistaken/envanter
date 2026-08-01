@@ -28,13 +28,13 @@ const EXCHANGE_RATE_URLS = {
 };
 
 function readSession(key) {
-  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
 }
 
 function writeSession(key, value) {
   try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
   } catch (e) {}
 }
 
@@ -65,13 +65,15 @@ function setAuthStatus(message, isError) {
 }
 
 function showAuthGate(message, isError) {
+  // Clear any scheduled expiry checks
+  clearTokenExpiryCheck();
   googleIdToken = '';
   signedInEmail = '';
   writeSession(AUTH_TOKEN_KEY, '');
   products = [];
   try {
-    localStorage.removeItem('teknikelCachedProducts');
-    localStorage.removeItem('teknikelCacheTime');
+    sessionStorage.removeItem('teknikelCachedProducts');
+    sessionStorage.removeItem('teknikelCacheTime');
   } catch (e) {}
   document.body.classList.add('auth-pending');
   document.getElementById('appShell').setAttribute('aria-hidden', 'true');
@@ -80,7 +82,7 @@ function showAuthGate(message, isError) {
 }
 
 function isAdminAccount() {
-  return String(signedInEmail || '').toLowerCase() === ADMIN_EMAIL;
+  return String(signedInEmail || '').toLowerCase() === String(ADMIN_EMAIL || '').toLowerCase();
 }
 
 function applyRoleVisibility(email) {
@@ -101,7 +103,39 @@ function unlockApp(token) {
   applyRoleVisibility(payload && payload.email ? payload.email : '');
   loadData();
   loadExchangeRates();
+  // Schedule automatic sign-out based on token expiry
+  scheduleTokenExpiryCheck();
 }
+
+// Token expiry handling: schedules a sign-out when the current token expires (with small buffer).
+var _tokenExpiryTimer = null;
+function clearTokenExpiryCheck() {
+  try { if (_tokenExpiryTimer) { clearTimeout(_tokenExpiryTimer); _tokenExpiryTimer = null; } } catch (e) {}
+}
+function scheduleTokenExpiryCheck() {
+  try {
+    clearTokenExpiryCheck();
+    if (!googleIdToken) return;
+    var payload = decodeGoogleCredential(googleIdToken);
+    if (!payload || !payload.exp) return;
+    var expiresAt = Number(payload.exp) * 1000;
+    // Sign out 10 seconds before expiry to avoid races
+    var ms = expiresAt - Date.now() - 10000;
+    if (ms <= 0) {
+      // Already expired or too close
+      showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+      return;
+    }
+    _tokenExpiryTimer = setTimeout(function() {
+      try {
+        showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+      } catch (e) { console.error('token expiry handler', e); }
+    }, ms);
+  } catch (e) { console.error('scheduleTokenExpiryCheck', e); }
+}
+// Re-check on page focus/visibility to handle clocks and suspended timers
+window.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') scheduleTokenExpiryCheck(); });
+window.addEventListener('focus', function(){ scheduleTokenExpiryCheck(); });
 
 function handleGoogleCredential(response) {
   var token = response && response.credential ? response.credential : '';
@@ -167,27 +201,33 @@ function openLocalDesignPreview() {
   document.getElementById('statLastSync').textContent = 'Şimdi';
   document.getElementById('lastSyncText').textContent = 'Yerel tasarım önizlemesi';
   document.getElementById('criticalStockCount').textContent = 'Canlı veride hesaplanır';
-  document.getElementById('criticalStockList').innerHTML =
-    '<span class="quick-empty">Gerçek stok bilgileri yalnızca güvenli canlı sitede gösterilir.</span>';
+  var cs = document.getElementById('criticalStockList');
+  while (cs.firstChild) cs.removeChild(cs.firstChild);
+  var notice = document.createElement('span'); notice.className = 'quick-empty'; notice.textContent = 'Gerçek stok bilgileri yalnızca güvenli canlı sitede gösterilir.';
+  cs.appendChild(notice);
   document.getElementById('infoBox').textContent =
     'Tasarım önizlemesi · Google Sheets ve Apps Script bağlantısı canlı sitede aynen korunur.';
   loadExchangeRates();
 }
 
 function signOut() {
+  // Clear scheduled expiry checks and sign out
+  clearTokenExpiryCheck();
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
 }
 
 function readStore(key, fallback) {
   try {
-    var value = JSON.parse(localStorage.getItem(key));
+    var raw = readSession(key);
+    if (!raw) return fallback;
+    var value = JSON.parse(raw);
     return value == null ? fallback : value;
   } catch (e) { return fallback; }
 }
 
 function writeStore(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  try { writeSession(key, value ? JSON.stringify(value) : ''); } catch (e) {}
 }
 
 function formatExchangeRate(value) {
@@ -544,7 +584,9 @@ async function loadData(manual) {
   var refreshBtn = document.getElementById('refreshDataBtn');
   refreshBtn.classList.add('loading');
   refreshBtn.textContent = '↻ Yenileniyor';
-  document.getElementById('infoBox').innerHTML = '<span class="skeleton-line"></span>';
+  var infoBoxEl = document.getElementById('infoBox');
+  while (infoBoxEl.firstChild) infoBoxEl.removeChild(infoBoxEl.firstChild);
+  var sk = document.createElement('span'); sk.className = 'skeleton-line'; infoBoxEl.appendChild(sk);
   try {
     const results = await fetchSecureInventory();
     const failedCount = results.filter(function(result){ return result === null; }).length;
@@ -715,9 +757,18 @@ async function submitAddProduct(event) {
 function populateCategories() {
   var select = document.getElementById('categoryFilter');
   var current = select.value;
-  select.innerHTML = '<option value="">Tüm kategoriler</option>' + SHEETS.map(function(s) {
-    return '<option value="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</option>';
-  }).join('');
+  // Rebuild options safely using DOM methods
+  while (select.firstChild) select.removeChild(select.firstChild);
+  var defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Tüm kategoriler';
+  select.appendChild(defaultOpt);
+  SHEETS.forEach(function(s){
+    var opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = s.name;
+    select.appendChild(opt);
+  });
   select.value = current;
 }
 
@@ -730,9 +781,18 @@ function populateBrands() {
     if (brand) counts[brand] = (counts[brand] || 0) + 1;
   });
   var brands = Object.keys(counts).sort(function(a, b){ return a.localeCompare(b, 'tr'); });
-  select.innerHTML = '<option value="">Tüm markalar</option>' + brands.map(function(brand) {
-    return '<option value="' + escapeHtml(brand) + '">' + escapeHtml(brand) + '</option>';
-  }).join('');
+  // Rebuild options safely
+  while (select.firstChild) select.removeChild(select.firstChild);
+  var defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Tüm markalar';
+  select.appendChild(defaultOpt);
+  brands.forEach(function(brand){
+    var opt = document.createElement('option');
+    opt.value = brand;
+    opt.textContent = brand;
+    select.appendChild(opt);
+  });
   select.value = brands.includes(current) ? current : '';
 }
 
@@ -768,16 +828,26 @@ function renderCriticalStocks() {
   document.getElementById('criticalStockCount').textContent = critical.length ? critical.length + ' kritik ürün' : 'Kritik stok yok';
   var statEl = document.getElementById('statCriticalCount');
   if (statEl) statEl.textContent = critical.length ? critical.length + ' ürün' : 'Yok';
+  while (list.firstChild) list.removeChild(list.firstChild);
   if (!critical.length) {
-    list.innerHTML = '<span class="quick-empty">Kritik seviyede ürün bulunmuyor.</span>';
+    var empty = document.createElement('span');
+    empty.className = 'quick-empty';
+    empty.textContent = 'Kritik seviyede ürün bulunmuyor.';
+    list.appendChild(empty);
     return;
   }
-  list.innerHTML = critical.slice(0, 20).map(function(product) {
-    var key = encodeURIComponent(productKey(product));
-    return '<div class="critical-stock-row"><button onclick="openProductByEncodedKey(\'' + key + '\')">' +
-      escapeHtml(product.name) + '</button><span>' + escapeHtml(product.sheet) + '</span><strong>' +
-      (Number(product.stock) <= 0 ? 'Tükendi' : product.stock + ' adet') + '</strong></div>';
-  }).join('');
+  critical.slice(0,20).forEach(function(product){
+    var row = document.createElement('div');
+    row.className = 'critical-stock-row';
+    var btn = document.createElement('button');
+    btn.setAttribute('data-action','openProductByEncodedKey');
+    btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(productKey(product))])));
+    btn.textContent = product.name;
+    var sp = document.createElement('span'); sp.textContent = product.sheet;
+    var strong = document.createElement('strong'); strong.textContent = Number(product.stock) <= 0 ? 'Tükendi' : product.stock + ' adet';
+    row.appendChild(btn); row.appendChild(sp); row.appendChild(strong);
+    list.appendChild(row);
+  });
 }
 
 function formatDate(val) {
@@ -908,7 +978,7 @@ function selectProduct(idx) {
   var p = products[idx];
   if (p) {
     document.getElementById('searchInput').value = p.name;
-    document.getElementById('suggestions').innerHTML = '';
+    var sugClearEl = document.getElementById('suggestions'); while (sugClearEl && sugClearEl.firstChild) sugClearEl.removeChild(sugClearEl.firstChild);
     showResult(p);
     addRecentProduct(p);
   }
@@ -974,24 +1044,45 @@ function openProductByEncodedKey(encodedKey) {
 
 function renderQuickLists() {
   var el = document.getElementById('quickLists');
+  while (el.firstChild) el.removeChild(el.firstChild);
   var grouped = {};
   favorites.forEach(function(key) {
     var group = favoriteGroups[key] || 'Favoriler';
     if (!grouped[group]) grouped[group] = [];
     grouped[group].push(key);
   });
-  var favoriteItems = Object.keys(grouped).map(function(group) {
-    var chips = grouped[group].slice(0, 6).map(function(key) {
+  var any = false;
+  Object.keys(grouped).forEach(function(group) {
+    var title = document.createElement('span'); title.className = 'favorite-group-title';
+    title.textContent = group;
+    var chips = document.createElement('div');
+    grouped[group].slice(0,6).forEach(function(key){
       var product = products.find(function(item){ return productKey(item) === key; });
-      return product ? '<button class="product-chip favorite" onclick="openProductByEncodedKey(\'' + encodeURIComponent(key) + '\')">★ ' + escapeHtml(product.name) + '</button>' : '';
-    }).join('');
-    return chips ? '<span class="favorite-group-title">' + escapeHtml(group) + '</span>' + chips : '';
-  }).join('');
-  var recentItems = recentProducts.slice(0, 4).map(function(key) {
+      if (!product) return;
+      any = true;
+      var btn = document.createElement('button'); btn.className = 'product-chip favorite';
+      btn.setAttribute('data-action','openProductByEncodedKey');
+      btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(key)])));
+      btn.textContent = '★ ' + product.name;
+      chips.appendChild(btn);
+    });
+    if (chips.childNodes.length) { el.appendChild(title); el.appendChild(chips); }
+  });
+  recentProducts.slice(0,4).forEach(function(key){
+    if (favorites.includes(key)) return;
     var product = products.find(function(item){ return productKey(item) === key; });
-    return product && !favorites.includes(key) ? '<button class="product-chip" onclick="openProductByEncodedKey(\'' + encodeURIComponent(key) + '\')">' + escapeHtml(product.name) + '</button>' : '';
-  }).join('');
-  el.innerHTML = favoriteItems + recentItems || '<span class="quick-empty">Henüz favori veya son arama yok.</span>';
+    if (!product) return;
+    any = true;
+    var btn = document.createElement('button'); btn.className = 'product-chip';
+    btn.setAttribute('data-action','openProductByEncodedKey');
+    btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(key)])));
+    btn.textContent = product.name;
+    el.appendChild(btn);
+  });
+  if (!any) {
+    var empty = document.createElement('span'); empty.className = 'quick-empty'; empty.textContent = 'Henüz favori veya son arama yok.';
+    el.appendChild(empty);
+  }
 }
 
 function search(q) {
@@ -1017,7 +1108,7 @@ function search(q) {
     document.getElementById('priceChangeBadge').textContent = 'GÜNCEL KAYIT';
     document.getElementById('priceChangeBadge').className = '';
     currentProduct = null;
-    sugEl.innerHTML = '';
+    while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild);
     return;
   }
 
@@ -1042,7 +1133,7 @@ function search(q) {
     return true;
   });
   var exact = q ? pool.find(function(p){ return p.barcode === q; }) : null;
-  if (exact) { showResult(exact); addRecentProduct(exact); sugEl.innerHTML = ''; return; }
+  if (exact) { showResult(exact); addRecentProduct(exact); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
   var scoredMatches = pool.map(function(product) {
     var result = scoreProductSearch(product, q);
@@ -1057,23 +1148,29 @@ function search(q) {
   var fuzzyUsed = scoredMatches.length > 0 && scoredMatches.every(function(item){ return item.fuzzy; });
   var matches = scoredMatches.map(function(item){ return item.product; });
 
-  if (matches.length === 0) { showResult(null); sugEl.innerHTML = ''; return; }
+  if (matches.length === 0) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
   showResult(matches[0]);
-  if (matches.length === 1) { sugEl.innerHTML = ''; return; }
+  if (matches.length === 1) { while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
-  var html = '<div class="sug-count">' + (fuzzyUsed ? 'Benzer ' : '') + matches.length + ' eşleşme — seçin:</div>';
-  html += matches.slice(0, 30).map(function(p) {
+  while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild);
+  var countDiv = document.createElement('div'); countDiv.className = 'sug-count'; countDiv.textContent = (fuzzyUsed ? 'Benzer ' : '') + matches.length + ' eşleşme — seçin:';
+  sugEl.appendChild(countDiv);
+  matches.slice(0, 30).forEach(function(p) {
     var idx = products.indexOf(p);
-    return '<button type="button" class="sug-item" onclick="selectProduct(' + idx + ')">' +
-      '<span class="sug-name">' + escapeHtml(p.name) +
-        '<br><span class="sug-barcode">' + escapeHtml(p.sheet) +
-        (p.barcode ? ' · ' + escapeHtml(p.barcode) : '') + '</span>' +
-      '</span>' +
-      '<span class="sug-price">' + escapeHtml(formatPrice(p.price)) + '</span>' +
-      '</button>';
-  }).join('');
-  sugEl.innerHTML = html;
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'sug-item';
+    btn.setAttribute('data-action', 'selectProduct');
+    btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx])));
+    var nameSpan = document.createElement('span'); nameSpan.className = 'sug-name';
+    nameSpan.textContent = p.name;
+    var br = document.createElement('br');
+    var barcodeSpan = document.createElement('span'); barcodeSpan.className = 'sug-barcode';
+    barcodeSpan.textContent = p.sheet + (p.barcode ? ' · ' + p.barcode : '');
+    nameSpan.appendChild(br); nameSpan.appendChild(barcodeSpan);
+    var priceSpan = document.createElement('span'); priceSpan.className = 'sug-price'; priceSpan.textContent = formatPrice(p.price);
+    btn.appendChild(nameSpan); btn.appendChild(priceSpan);
+    sugEl.appendChild(btn);
+  });
 }
 
 function clearAdvancedFilters() {
@@ -1106,7 +1203,7 @@ function addToBasket() {
   renderBasket(); updateBadge();
   document.getElementById('searchInput').value = '';
   document.getElementById('qtyInput').value = 1;
-  document.getElementById('suggestions').innerHTML = '';
+  var sugClearEl = document.getElementById('suggestions'); while (sugClearEl && sugClearEl.firstChild) sugClearEl.removeChild(sugClearEl.firstChild);
   search('');
   showToast('Ürün sepete eklendi.');
   showTab('sepet');
@@ -1143,36 +1240,67 @@ function clearBasket() {
 
 function renderBasket() {
   var el = document.getElementById('basketWrap');
+  while (el.firstChild) el.removeChild(el.firstChild);
   if (!basket.length) {
-    el.innerHTML = '<div class="empty-basket">Sepet boş<br><span style="font-size:11px">Sorgulama sayfasından ürün ekleyin</span></div>';
+    var empty = document.createElement('div');
+    empty.className = 'empty-basket';
+    var span = document.createElement('span'); span.style.fontSize = '11px';
+    span.textContent = 'Sorgulama sayfasından ürün ekleyin';
+    empty.textContent = 'Sepet boş'; // small safe static markup
+    empty.appendChild(document.createElement('br'));
+    empty.appendChild(span);
+    el.appendChild(empty);
     if (document.getElementById('offerModal').classList.contains('active')) closeOfferModal();
     updateMobileBasketSummary();
     return;
   }
   var total = 0;
-  var rows = basket.map(function(item, idx) {
+  var table = document.createElement('table'); table.className = 'basket-tbl';
+  var thead = document.createElement('thead');
+  var trHead = document.createElement('tr');
+  ['Ürün','Fiyat','Adet','Toplam',''].forEach(function(txt){ var th = document.createElement('th'); th.textContent = txt; trHead.appendChild(th); });
+  thead.appendChild(trHead);
+  table.appendChild(thead);
+  var tbody = document.createElement('tbody');
+  basket.forEach(function(item, idx){
     var sub = item.price != null ? Number(item.price) * item.qty : 0;
     total += sub;
-    return '<tr class="item-row"><td>' + escapeHtml(item.name) + '</td>' +
-      '<td>' + escapeHtml(formatPrice(item.price)) + '</td>' +
-      '<td><span class="basket-qty"><button onclick="changeBasketQty(' + idx + ', -1)" aria-label="Adedi azalt">−</button>' +
-      '<strong>' + item.qty + '</strong><button onclick="changeBasketQty(' + idx + ', 1)" aria-label="Adedi artır">+</button></span></td>' +
-      '<td>' + (item.price != null ? formatPrice(sub) : '—') + '</td>' +
-      '<td><button class="del-btn" onclick="removeFromBasket(' + idx + ')">✕</button></td></tr>';
-  }).join('');
-
-  var iskonto       = total * (iskontoOrani / 100);
-  var iskontoluToplam = total - iskonto;
-  var kdvDahil      = iskontoluToplam * 1.20;
-
-  el.innerHTML = '<table class="basket-tbl">' +
-    '<thead><tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr></thead>' +
-    '<tbody>' + rows + '</tbody>' +
-    '<tfoot>' +
-    (iskontoOrani > 0 ? '<tr class="iskonto"><td colspan="3" style="text-align:right;padding-right:10px">%' + iskontoOrani + ' İskonto</td><td colspan="2">-' + formatPrice(iskonto) + '</td></tr>' +
-    '<tr class="iskonto-sonrasi"><td colspan="3" style="text-align:right;padding-right:10px">İskonto Sonrası Toplam</td><td colspan="2">' + formatPrice(iskontoluToplam) + '</td></tr>' : '') +
-    '<tr class="kdv-dahil"><td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam (%20)</td><td colspan="2">' + formatPrice(kdvDahil) + '</td></tr>' +
-    '</tfoot></table>';
+    var tr = document.createElement('tr'); tr.className = 'item-row';
+    var tdName = document.createElement('td'); tdName.textContent = item.name;
+    var tdPrice = document.createElement('td'); tdPrice.textContent = formatPrice(item.price);
+    var tdQty = document.createElement('td');
+    var spanQty = document.createElement('span'); spanQty.className = 'basket-qty';
+    var btnDec = document.createElement('button'); btnDec.setAttribute('data-action','changeBasketQty'); btnDec.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx, -1]))); btnDec.setAttribute('aria-label','Adedi azalt'); btnDec.textContent = '−';
+    var strong = document.createElement('strong'); strong.textContent = item.qty;
+    var btnInc = document.createElement('button'); btnInc.setAttribute('data-action','changeBasketQty'); btnInc.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx, 1]))); btnInc.setAttribute('aria-label','Adedi artır'); btnInc.textContent = '+';
+    spanQty.appendChild(btnDec); spanQty.appendChild(strong); spanQty.appendChild(btnInc);
+    tdQty.appendChild(spanQty);
+    var tdTotal = document.createElement('td'); tdTotal.textContent = item.price != null ? formatPrice(sub) : '—';
+    var tdDel = document.createElement('td'); var delBtn = document.createElement('button'); delBtn.className = 'del-btn'; delBtn.setAttribute('data-action','removeFromBasket'); delBtn.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx]))); delBtn.textContent = '✕'; tdDel.appendChild(delBtn);
+    tr.appendChild(tdName); tr.appendChild(tdPrice); tr.appendChild(tdQty); tr.appendChild(tdTotal); tr.appendChild(tdDel);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  var tfoot = document.createElement('tfoot');
+  if (iskontoOrani > 0) {
+    var tr1 = document.createElement('tr'); tr1.className = 'iskonto';
+    var td1a = document.createElement('td'); td1a.setAttribute('colspan','3'); td1a.style.textAlign = 'right'; td1a.style.paddingRight = '10px'; td1a.textContent = '%' + iskontoOrani + ' İskonto';
+    var td1b = document.createElement('td'); td1b.setAttribute('colspan','2'); td1b.textContent = '-' + formatPrice(total * (iskontoOrani/100));
+    tr1.appendChild(td1a); tr1.appendChild(td1b);
+    tfoot.appendChild(tr1);
+    var tr2 = document.createElement('tr'); tr2.className = 'iskonto-sonrasi';
+    var td2a = document.createElement('td'); td2a.setAttribute('colspan','3'); td2a.style.textAlign = 'right'; td2a.style.paddingRight = '10px'; td2a.textContent = 'İskonto Sonrası Toplam';
+    var td2b = document.createElement('td'); td2b.setAttribute('colspan','2'); td2b.textContent = formatPrice(total - (total * (iskontoOrani/100)));
+    tr2.appendChild(td2a); tr2.appendChild(td2b);
+    tfoot.appendChild(tr2);
+  }
+  var trKdv = document.createElement('tr'); trKdv.className = 'kdv-dahil';
+  var tdK1 = document.createElement('td'); tdK1.setAttribute('colspan','3'); tdK1.style.textAlign = 'right'; tdK1.style.paddingRight = '10px'; tdK1.textContent = 'KDV Dahil Toplam (%20)';
+  var tdK2 = document.createElement('td'); tdK2.setAttribute('colspan','2'); tdK2.textContent = formatPrice((total - (total * (iskontoOrani/100))) * 1.20);
+  trKdv.appendChild(tdK1); trKdv.appendChild(tdK2);
+  tfoot.appendChild(trKdv);
+  table.appendChild(tfoot);
+  el.appendChild(table);
   updateMobileBasketSummary();
   if (document.getElementById('offerModal').classList.contains('active')) updateOfferSummary();
 }
@@ -1217,18 +1345,20 @@ function saveCurrentBasket() {
 
 function renderSavedBaskets() {
   var el = document.getElementById('savedBasketList');
+  while (el.firstChild) el.removeChild(el.firstChild);
   if (!savedBaskets.length) {
-    el.innerHTML = '<span class="quick-empty">Kayıtlı sepet bulunmuyor.</span>';
-    return;
+    var empty = document.createElement('span'); empty.className = 'quick-empty'; empty.textContent = 'Kayıtlı sepet bulunmuyor.'; el.appendChild(empty); return;
   }
-  el.innerHTML = savedBaskets.map(function(saved) {
+  savedBaskets.forEach(function(saved){
     var count = saved.items.reduce(function(sum, item){ return sum + Number(item.qty || 0); }, 0);
-    return '<div class="saved-row">' +
-      '<div class="saved-copy"><strong>' + escapeHtml(saved.name) + '</strong><span>' +
-      new Date(saved.date).toLocaleString('tr-TR') + ' · ' + count + ' ürün</span></div>' +
-      '<button class="mini-btn" onclick="restoreSavedBasket(' + saved.id + ')">Aç</button>' +
-      '<button class="mini-btn danger" onclick="deleteSavedBasket(' + saved.id + ')">Sil</button></div>';
-  }).join('');
+    var row = document.createElement('div'); row.className = 'saved-row';
+    var copy = document.createElement('div'); copy.className = 'saved-copy';
+    var strong = document.createElement('strong'); strong.textContent = saved.name; copy.appendChild(strong);
+    var span = document.createElement('span'); span.textContent = new Date(saved.date).toLocaleString('tr-TR') + ' · ' + count + ' ürün'; copy.appendChild(span);
+    var btnOpen = document.createElement('button'); btnOpen.className='mini-btn'; btnOpen.setAttribute('data-action','restoreSavedBasket'); btnOpen.setAttribute('data-args', encodeURIComponent(JSON.stringify([saved.id]))); btnOpen.textContent='Aç';
+    var btnDel = document.createElement('button'); btnDel.className='mini-btn danger'; btnDel.setAttribute('data-action','deleteSavedBasket'); btnDel.setAttribute('data-args', encodeURIComponent(JSON.stringify([saved.id]))); btnDel.textContent='Sil';
+    row.appendChild(copy); row.appendChild(btnOpen); row.appendChild(btnDel); el.appendChild(row);
+  });
 }
 
 function restoreSavedBasket(id) {
@@ -1303,9 +1433,13 @@ function ensureOfferNumber() {
 
 function renderCustomerProfiles() {
   var list = document.getElementById('customerProfiles');
-  list.innerHTML = customerProfiles.map(function(profile) {
-    return '<option value="' + escapeHtml(profile.name) + '">İskonto %' + Number(profile.discount || 0) + '</option>';
-  }).join('');
+  while (list.firstChild) list.removeChild(list.firstChild);
+  customerProfiles.forEach(function(profile){
+    var opt = document.createElement('option');
+    opt.value = profile.name;
+    opt.textContent = 'İskonto %' + Number(profile.discount || 0);
+    list.appendChild(opt);
+  });
 }
 
 function saveCustomerProfile() {
@@ -1380,17 +1514,19 @@ function saveOfferHistory() {
 
 function renderOfferHistory() {
   var el = document.getElementById('offerHistoryList');
+  while (el.firstChild) el.removeChild(el.firstChild);
   if (!offerHistory.length) {
-    el.innerHTML = '<span class="quick-empty">Henüz kaydedilmiş teklif yok.</span>';
-    return;
+    var empty = document.createElement('span'); empty.className = 'quick-empty'; empty.textContent = 'Henüz kaydedilmiş teklif yok.'; el.appendChild(empty); return;
   }
-  el.innerHTML = offerHistory.map(function(offer) {
-    return '<div class="saved-row"><div class="saved-copy"><strong>' + escapeHtml(offer.id + ' · ' + offer.customer) +
-      '</strong><span>' + new Date(offer.date).toLocaleString('tr-TR') + ' · ' + escapeHtml(formatPrice(offer.total)) +
-      '</span></div><button class="mini-btn" onclick="copySavedOffer(\'' + encodeURIComponent(offer.id) +
-      '\')">Kopyala</button><button class="mini-btn danger" onclick="deleteOfferHistory(\'' +
-      encodeURIComponent(offer.id) + '\')">Sil</button></div>';
-  }).join('');
+  offerHistory.forEach(function(offer){
+    var row = document.createElement('div'); row.className = 'saved-row';
+    var copyDiv = document.createElement('div'); copyDiv.className = 'saved-copy';
+    var strong = document.createElement('strong'); strong.textContent = offer.id + ' · ' + offer.customer; copyDiv.appendChild(strong);
+    var span = document.createElement('span'); span.textContent = new Date(offer.date).toLocaleString('tr-TR') + ' · ' + formatPrice(offer.total); copyDiv.appendChild(span);
+    var btnCopy = document.createElement('button'); btnCopy.className = 'mini-btn'; btnCopy.setAttribute('data-action','copySavedOffer'); btnCopy.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(offer.id)]))); btnCopy.textContent = 'Kopyala';
+    var btnDel = document.createElement('button'); btnDel.className = 'mini-btn danger'; btnDel.setAttribute('data-action','deleteOfferHistory'); btnDel.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(offer.id)]))); btnDel.textContent = 'Sil';
+    row.appendChild(copyDiv); row.appendChild(btnCopy); row.appendChild(btnDel); el.appendChild(row);
+  });
 }
 
 function copySavedOffer(encodedId) {
@@ -1426,9 +1562,13 @@ function closeOfferModal() {
 
 function updateOfferSummary() {
   var totals = getBasketTotals();
-  document.getElementById('offerSummary').innerHTML =
-    '<strong>' + escapeHtml(ensureOfferNumber()) + ' · ' + basket.length + ' kalem ürün</strong><br>' +
-    'İskonto: %' + iskontoOrani + ' · KDV dahil toplam: <strong>' + escapeHtml(formatPrice(totals.vatIncluded)) + '</strong>';
+  var offerSummaryEl = document.getElementById('offerSummary');
+  while (offerSummaryEl.firstChild) offerSummaryEl.removeChild(offerSummaryEl.firstChild);
+  var strongEl = document.createElement('strong'); strongEl.textContent = ensureOfferNumber() + ' · ' + basket.length + ' kalem ürün';
+  offerSummaryEl.appendChild(strongEl);
+  offerSummaryEl.appendChild(document.createElement('br'));
+  offerSummaryEl.appendChild(document.createTextNode('İskonto: %' + iskontoOrani + ' · KDV dahil toplam: '));
+  var strongTotal = document.createElement('strong'); strongTotal.textContent = formatPrice(totals.vatIncluded); offerSummaryEl.appendChild(strongTotal);
 }
 
 function copyOffer() {
@@ -1469,14 +1609,34 @@ function shareOffer() {
 function printOffer() {
   if (!basket.length) { showToast('PDF için sepete ürün ekleyin.'); return; }
   var text = escapeHtml(buildOfferText()).replace(/\n/g, '<br>');
-  var win = window.open('', '_blank');
-  if (!win) { showToast('Yazdırma penceresi açılamadı.'); return; }
-  win.document.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
-    '<style>body{font-family:Arial,sans-serif;color:#142033;padding:72px 24px 40px;line-height:1.6;background:#f4f7fb}.back-btn{position:fixed;top:14px;left:14px;z-index:10;display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #cbd9e8;border-radius:999px;background:#fff;color:#12345a;box-shadow:0 8px 22px rgba(18,52,90,.14);font-weight:700;cursor:pointer}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px;margin:0 auto;background:#fff}h1{color:#12345a;margin:0 0 20px}small{color:#718099}@media print{body{padding:0;background:#fff}.back-btn{display:none}.box{border:0;padding:0;max-width:none}}</style></head>' +
-    '<body><button class="back-btn" type="button" onclick="window.close()" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
-    '</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); }, 200);
+  var win = null;
+  var objectUrl = null;
+  try {
+    var html = '<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
+      '<style>body{font-family:Arial,sans-serif;color:#142033;padding:72px 24px 40px;line-height:1.6;background:#f4f7fb}.back-btn{position:fixed;top:14px;left:14px;z-index:10;display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #cbd9e8;border-radius:999px;background:#fff;color:#12345a;box-shadow:0 8px 22px rgba(18,52,90,.14);font-weight:700;cursor:pointer}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px;margin:0 auto;background:#fff}h1{color:#12345a;margin:0 0 20px}small{color:#718099}@media print{body{padding:0;background:#fff}.back-btn{display:none}.box{border:0;padding:0;max-width:none}}</style></head>' +
+      '<body><button class="back-btn" type="button" id="printBackBtn" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
+      '<script>(function(){try{var b=document.getElementById("printBackBtn"); if(b) b.addEventListener("click", function(){ window.close(); });}catch(e){}})();</script>' +
+      '</body></html>';
+
+    var blob = new Blob([html], { type: 'text/html' });
+    objectUrl = URL.createObjectURL(blob);
+    win = window.open(objectUrl, '_blank', 'noopener');
+    if (!win) { showToast('Yazdırma penceresi açılamadı.'); URL.revokeObjectURL(objectUrl); return; }
+
+    // Try to print when the new window loads, with fallbacks
+    try {
+      if (win.addEventListener) {
+        win.addEventListener('load', function() { setTimeout(function(){ try{ win.print(); } catch(e){} }, 200); }, { once: true });
+      }
+    } catch (e) {}
+
+    // Fallback attempt after a short delay
+    setTimeout(function(){ try{ win.print(); } catch(e){}; setTimeout(function(){ if (objectUrl) URL.revokeObjectURL(objectUrl); }, 1000); }, 500);
+  } catch (err) {
+    if (win && win.close) try { win.close(); } catch (e) {}
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    showToast('Yazdırma sırasında hata: ' + (err && err.message || err));
+  }
 }
 
 function openAdminModal() {
@@ -1572,9 +1732,9 @@ function toggleTheme() {
 
 function updateBadge() {
   var count = basket.reduce(function(s,i){ return s + (Number(i.qty) || 0); }, 0);
-  document.getElementById('sepetTab').innerHTML = count > 0
-    ? '🛒 Sepet <span class="badge">' + count + '</span>'
-    : '🛒 Sepet';
+  var sepetTabEl = document.getElementById('sepetTab'); while (sepetTabEl && sepetTabEl.firstChild) sepetTabEl.removeChild(sepetTabEl.firstChild);
+  sepetTabEl.appendChild(document.createTextNode('🛒 Sepet'));
+  if (count > 0) { sepetTabEl.appendChild(document.createTextNode(' ')); var badgeEl = document.createElement('span'); badgeEl.className = 'badge'; badgeEl.textContent = count; sepetTabEl.appendChild(badgeEl); }
   updateMobileBasketSummary();
 }
 
@@ -1681,6 +1841,121 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
     scanButton.disabled = false;
   }
 });
+
+// Bind elements with inline onclick to addEventListener where possible.
+// Supports simple calls like fn(), fn(123), fn('str'), fn(this), fn(123, 'a', this),
+// multiple statements separated by semicolons, and simple DOM method calls like document.getElementById('id').focus().
+(function bindInlineOnclicks(){
+  try {
+    var elements = Array.from(document.querySelectorAll('[onclick]'));
+    elements.forEach(function(el){
+      var attr = el.getAttribute('onclick') || '';
+      // Split into semicolon-separated statements and parse each
+      var statements = attr.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+      if (!statements.length) return;
+
+      var handlers = [];
+      var unsafe = false;
+
+      for (var si = 0; si < statements.length; si++) {
+        var stmt = statements[si];
+        // functionName(args)
+        var fnCall = stmt.match(/^\s*([A-Za-z0-9_$]+)\s*\((.*)\)\s*$/);
+        if (fnCall) {
+          var fnName = fnCall[1];
+          var argsText = fnCall[2].trim();
+          var fn = window[fnName];
+          if (typeof fn !== 'function') { unsafe = true; break; }
+
+          var parsedArgs = [];
+          if (argsText.length > 0) {
+            var parts = argsText.match(/('(?:\\'|[^'])*'|\"(?:\\\"|[^\"])*\"|[^,]+)/g);
+            if (!parts) { unsafe = true; break; }
+            for (var pi = 0; pi < parts.length; pi++) {
+              var p = parts[pi].trim();
+              if (/^this$/i.test(p)) { parsedArgs.push(function(el){ return function(){ return el; }; }(el)); continue; }
+              if (/^[-+]?[0-9]*\.?[0-9]+$/.test(p)) { parsedArgs.push(Number(p)); continue; }
+              var mstr = p.match(/^['\"]([\s\S]*)['\"]$/);
+              if (mstr) { parsedArgs.push(mstr[1].replace(/\\(['\"]) /g,'$1')); continue; }
+              unsafe = true; break;
+            }
+            if (unsafe) break;
+          }
+
+          (function(fn, parsedArgs){
+            handlers.push(function(e){
+              var resolved = parsedArgs.map(function(a){ return (typeof a === 'function' && a.length === 0) ? a() : a; });
+              try { fn.apply(el, resolved.length ? resolved : [e]); } catch (err) { console.error('delegated fn error', err); }
+            });
+          })(fn, parsedArgs);
+          continue;
+        }
+
+        // document.getElementById('id').method()
+        var domMethod = stmt.match(/^\s*document\.getElementById\(['\"]([^'\"]+)['\"]\)\.([A-Za-z0-9_$]+)\s*\(\s*\)\s*$/);
+        if (domMethod) {
+          (function(id, method){ handlers.push(function(){ try { var t = document.getElementById(id); if (t && typeof t[method] === 'function') t[method](); } catch(e){ console.error('dom method error', e); } }); })(domMethod[1], domMethod[2]);
+          continue;
+        }
+
+        // Unsupported statement
+        unsafe = true; break;
+      }
+
+      if (unsafe || !handlers.length) return; // skip complex onclicks for safety
+
+      var marker = 'data-bound-inline';
+      if (el.hasAttribute(marker)) return;
+      el.addEventListener('click', function(e){
+        for (var h = 0; h < handlers.length; h++) {
+          try { handlers[h](e); } catch(err) { console.error('handler error', err); }
+        }
+      });
+      el.setAttribute(marker, '1');
+      el.removeAttribute('onclick');
+    });
+  } catch (e) { console.warn('bindInlineOnclicks failed', e); }
+})();
+
+  }
+});
+
+// Delegated handler for data-action/data-args attributes
+(function addDataActionDelegation(){
+  function resolveArg(arg, hostEl){
+    try {
+      if (arg === '__THIS__') return hostEl;
+      if (typeof arg === 'string' && arg.indexOf('__QUERY__:') === 0) return document.querySelector(arg.slice(10));
+    } catch(e) { /* ignore */ }
+    return arg;
+  }
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    var action = el.getAttribute('data-action');
+    if (!action) return;
+    e.preventDefault();
+    var args = [];
+    var argsAttr = el.getAttribute('data-args');
+    if (argsAttr) {
+      try { args = JSON.parse(argsAttr); } catch(err){ args = [argsAttr]; }
+    }
+    args = args.map(function(a){ return resolveArg(a, el); });
+    var fn = window[action];
+    try {
+      if (typeof fn === 'function') fn.apply(el, args);
+    } catch(err) { console.error('data-action handler error', err); }
+    var postFocus = el.getAttribute('data-post-focus');
+    if (postFocus) {
+      var t = document.querySelector(postFocus);
+      if (t && typeof t.focus === 'function') t.focus();
+    }
+    var postAction = el.getAttribute('data-post-action');
+    if (postAction && typeof window[postAction] === 'function') {
+      try { window[postAction].call(el); } catch(err){ console.error('post action error', err); }
+    }
+  }, false);
+})();
 
 function stopCam() {
   if (reader) { reader.reset(); reader = null; }
