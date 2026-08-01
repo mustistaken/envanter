@@ -28,14 +28,28 @@ const EXCHANGE_RATE_URLS = {
 };
 
 function readSession(key) {
-  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+  try {
+    var value = localStorage.getItem(key) || '';
+    console.log('[readSession]', key, '=', value ? 'EXISTS' : 'EMPTY');
+    return value;
+  } catch (e) {
+    console.error('[readSession] Error:', e.message);
+    return '';
+  }
 }
 
 function writeSession(key, value) {
   try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
-  } catch (e) {}
+    if (value) {
+      localStorage.setItem(key, value);
+      console.log('[writeSession]', key, '= SET');
+    } else {
+      localStorage.removeItem(key);
+      console.log('[writeSession]', key, '= REMOVED');
+    }
+  } catch (e) {
+    console.error('[writeSession] Error:', e.message);
+  }
 }
 
 function decodeGoogleCredential(token) {
