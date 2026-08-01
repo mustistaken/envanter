@@ -37,14 +37,14 @@
         <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld" width="360" height="74" decoding="async">
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
-          <button class="refresh-btn" id="refreshDataBtn">↻ Veriyi yenile</button>
-          <button class="add-product-btn" id="addProductBtn" aria-label="Envantere yeni ürün ekle">＋ Ürün ekle</button>
+          <button class="refresh-btn" id="refreshDataBtn" data-action="refreshData">↻ Veriyi yenile</button>
+          <button class="add-product-btn" id="addProductBtn" data-action="openAddProductModal" aria-label="Envantere yeni ürün ekle">＋ Ürün ekle</button>
           <details class="utility-menu">
             <summary aria-label="Hesap ve ayarlar">•••</summary>
             <div class="utility-menu-panel">
-              <button class="utility-action" id="themeBtn">Tema değiştir</button>
-              <button class="utility-action" id="adminCenterBtn">Yönetim merkezi</button>
-              <button class="utility-action account-btn" id="accountBtn" title="Google oturumunu kapat">
+              <button class="utility-action" id="themeBtn" data-action="toggleTheme">Tema değiştir</button>
+              <button class="utility-action" id="adminCenterBtn" data-action="openAdminModal">Yönetim merkezi</button>
+              <button class="utility-action account-btn" id="accountBtn" data-action="signOut" title="Google oturumunu kapat">
                 <span id="accountEmail">Google hesabı</span> · Çıkış
               </button>
               <button class="utility-action install-btn" id="installBtn">Uygulamayı yükle</button>
@@ -57,8 +57,8 @@
   </header>
 
   <nav class="tabs" aria-label="Ana bölümler" role="tablist">
-    <button class="tab active" id="sorguTab" role="tab" aria-selected="true" aria-controls="tab-sorgu">⌕ &nbsp;Sorgulama</button>
-    <button class="tab inactive" role="tab" aria-selected="false" aria-controls="tab-sepet" id="sepetTab">🛒 &nbsp;Sepet</button>
+    <button class="tab active" id="sorguTab" data-action="showTab" data-args='["sorgu"]' role="tab" aria-selected="true" aria-controls="tab-sorgu">⌕ &nbsp;Sorgulama</button>
+    <button class="tab inactive" role="tab" aria-selected="false" aria-controls="tab-sepet" id="sepetTab" data-action="showTab" data-args='["sepet"]'>🛒 &nbsp;Sepet</button>
   </nav>
 
   <section class="overview-grid" aria-label="Envanter özeti">
@@ -87,7 +87,7 @@
     </article>
   </section>
 
-  <button class="mobile-basket-summary" id="mobileBasketSummary" type="button" aria-label="Sepeti aç">
+  <button class="mobile-basket-summary" id="mobileBasketSummary" data-action="showTab" data-args='["sepet"]' type="button" aria-label="Sepeti aç">
     <span><small>SEPET</small><strong id="mobileBasketItems">0 ürün</strong></span>
     <strong id="mobileBasketTotal">0,00 ₺</strong>
   </button>
@@ -467,6 +467,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.19"></script>
+<script src="app.js?v=14.20"></script>
 </body>
 </html>
