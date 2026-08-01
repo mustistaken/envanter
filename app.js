@@ -28,13 +28,13 @@ const EXCHANGE_RATE_URLS = {
 };
 
 function readSession(key) {
-  try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
 }
 
 function writeSession(key, value) {
   try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
   } catch (e) {}
 }
 
@@ -1701,28 +1701,53 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
   }
 });
 
-// Bind simple onclick attributes (no-argument calls) to addEventListener and remove inline onclicks.
-(function bindSimpleOnclicks(){
+// Bind elements with inline onclick to addEventListener where possible.
+// Supports simple calls like fn(), fn(123), fn('str'), fn(this), fn(123, 'a', this).
+(function bindInlineOnclicks(){
   try {
-    var elements = document.querySelectorAll('[onclick]');
+    var elements = Array.from(document.querySelectorAll('[onclick]'));
     elements.forEach(function(el){
       var attr = el.getAttribute('onclick') || '';
-      var m = attr.match(/^\s*([A-Za-z0-9_$]+)\s*\(\s*\)\s*;?\s*$/);
-      if (!m) return; // skip calls with arguments
-      var fnName = m[1];
+      // Match functionName(arg1, arg2, ...)
+      var callMatch = attr.replace(/;\s*$/, '').trim().match(/^\s*([A-Za-z0-9_$]+)\s*\((.*)\)\s*$/);
+      if (!callMatch) return;
+      var fnName = callMatch[1];
+      var argsText = callMatch[2].trim();
       var fn = window[fnName];
       if (typeof fn !== 'function') return;
-      // Avoid duplicating listeners
+
+      // Parse arguments (numbers, quoted strings, this). Skip if complex.
+      var args = [];
+      if (argsText.length > 0) {
+        // Split by commas not inside quotes
+        var parts = argsText.match(/('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|[^,]+)/g);
+        if (!parts) return;
+        for (var i = 0; i < parts.length; i++) {
+          var p = parts[i].trim();
+          if (/^this$/i.test(p)) { args.push(function(el){ return function(){ return el; }; }(el)); continue; }
+          if (/^[-+]?[0-9]*\.?[0-9]+$/.test(p)) { args.push(Number(p)); continue; }
+          var mstr = p.match(/^['"]([\s\S]*)['"]$/);
+          if (mstr) { args.push(mstr[1].replace(/\\(['"])/g,'$1')); continue; }
+          // Unsupported arg expression — abort binding for this element to avoid unsafe eval
+          return;
+        }
+      }
+
       var marker = 'data-bound-' + fnName;
       if (el.hasAttribute(marker)) return;
+
       el.addEventListener('click', function(e){
-        try { fn.call(this, e); } catch (err) { console.error('bound click error', err); }
+        try {
+          // Resolve any 'this' placeholders (we stored as functions)
+          var resolvedArgs = args.map(function(a){ return (typeof a === 'function' && a.length === 0) ? a() : a; });
+          fn.apply(el, resolvedArgs.length ? resolvedArgs : [e]);
+        } catch (err) { console.error('bound click error', err); }
       });
       el.setAttribute(marker, '1');
       // Remove inline onclick to improve CSP compatibility
       el.removeAttribute('onclick');
     });
-  } catch (e) { console.warn('bindSimpleOnclicks failed', e); }
+  } catch (e) { console.warn('bindInlineOnclicks failed', e); }
 })();
 
   }
