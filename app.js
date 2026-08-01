@@ -269,6 +269,9 @@ function resetUserStoresInMemory() {
   customerProfiles = [];
   offerHistory = [];
   favoriteGroups = {};
+  currentProduct = null;
+  iskontoOrani = 0;
+  currentOfferNumber = '';
 }
 
 function loadUserStores() {
@@ -685,6 +688,10 @@ function refreshData() {
 }
 
 function openAddProductModal() {
+  if (!isAdminAccount() && !isLocalDesignPreview()) {
+    showToast('Ürün ekleme yalnızca yönetici hesabına açıktır.');
+    return;
+  }
   if (!isUsableCredential(googleIdToken) && !isLocalDesignPreview()) {
     showToast('Ürün eklemek için Google hesabınızla yeniden giriş yapın.');
     return;
@@ -743,6 +750,11 @@ function updateAddProductCurrencyHint() {
 
 async function submitAddProduct(event) {
   event.preventDefault();
+  if (!isAdminAccount()) {
+    closeAddProductModal();
+    showToast('Ürün ekleme yalnızca yönetici hesabına açıktır.');
+    return;
+  }
   if (!isUsableCredential(googleIdToken)) {
     closeAddProductModal();
     showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
@@ -1976,7 +1988,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.15').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.16').catch(function(){}); });
 }
 
 updateConnectionState();
