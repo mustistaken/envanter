@@ -69,10 +69,6 @@ function showAuthGate(message, isError) {
   signedInEmail = '';
   writeSession(AUTH_TOKEN_KEY, '');
   products = [];
-  try {
-    localStorage.removeItem('teknikelCachedProducts');
-    localStorage.removeItem('teknikelCacheTime');
-  } catch (e) {}
   document.body.classList.add('auth-pending');
   document.getElementById('appShell').setAttribute('aria-hidden', 'true');
   document.getElementById('authGate').removeAttribute('aria-hidden');
@@ -99,6 +95,7 @@ function unlockApp(token) {
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
   document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
   applyRoleVisibility(payload && payload.email ? payload.email : '');
+  restoreCachedProducts();
   loadData();
   loadExchangeRates();
 }
@@ -538,13 +535,44 @@ function updateOverviewStats() {
   if (productStat) productStat.textContent = products.length ? products.length.toLocaleString('tr-TR') : '—';
 }
 
+function restoreCachedProducts() {
+  var cachedProducts = readStore('teknikelCachedProducts', []);
+  var cachedAt = Number(readStore('teknikelCacheTime', 0));
+  var maxAge = 24 * 60 * 60 * 1000;
+  if (!Array.isArray(cachedProducts) || !cachedProducts.length ||
+      !cachedAt || Date.now() - cachedAt > maxAge) {
+    return false;
+  }
+
+  products = cachedProducts;
+  populateCategories();
+  populateBrands();
+  renderCriticalStocks();
+  renderQuickLists();
+  updateOverviewStats();
+  setLastSync(new Date(cachedAt).toISOString(), true);
+  document.getElementById('infoBox').textContent =
+    products.length + ' ürün son kayıttan gösteriliyor. Güncel veri arka planda kontrol ediliyor…';
+  return true;
+}
+
+function saveProductCache() {
+  writeStore('teknikelCachedProducts', products);
+  writeStore('teknikelCacheTime', Date.now());
+}
+
 async function loadData(manual) {
   if (isLoadingData) return;
   isLoadingData = true;
   var refreshBtn = document.getElementById('refreshDataBtn');
   refreshBtn.classList.add('loading');
   refreshBtn.textContent = '↻ Yenileniyor';
-  document.getElementById('infoBox').innerHTML = '<span class="skeleton-line"></span>';
+  if (products.length) {
+    document.getElementById('infoBox').textContent =
+      products.length + ' ürün hazır. Güncel veri arka planda kontrol ediliyor…';
+  } else {
+    document.getElementById('infoBox').innerHTML = '<span class="skeleton-line"></span>';
+  }
   try {
     const results = await fetchSecureInventory();
     const failedCount = results.filter(function(result){ return result === null; }).length;
@@ -558,19 +586,26 @@ async function loadData(manual) {
     renderQuickLists();
     updateOverviewStats();
     setLastSync(syncedAt, false);
+    saveProductCache();
     document.getElementById('infoBox').textContent = products.length + ' ürün yüklendi.' +
       (failedCount ? ' ' + failedCount + ' sayfa yüklenemedi.' : '');
     if (manual) showToast('Ürün verileri yenilendi.');
   } catch(e) {
-    products = [];
-    populateCategories();
-    populateBrands();
-    renderCriticalStocks();
-    renderQuickLists();
-    updateOverviewStats();
-    document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
-    setLastSync('', false);
-    showToast('Güvenli ürün verisi alınamadı.');
+    if (!products.length) {
+      products = [];
+      populateCategories();
+      populateBrands();
+      renderCriticalStocks();
+      renderQuickLists();
+      updateOverviewStats();
+      document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
+      setLastSync('', false);
+      showToast('Güvenli ürün verisi alınamadı.');
+    } else {
+      document.getElementById('infoBox').textContent =
+        products.length + ' ürün son kayıttan gösteriliyor. Canlı senkronizasyon gecikti.';
+      showToast('Son kayıt gösteriliyor; güncel veri bağlantısı gecikti.');
+    }
     if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(e.message || ''))) {
       showAuthGate(e.message + ' Lütfen yeniden giriş yapın.', true);
     }
@@ -1699,7 +1734,7 @@ if (reloadLogo) {
 }
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.11').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.12').catch(function(){}); });
 }
 
 updateConnectionState();
