@@ -774,7 +774,7 @@ function renderCriticalStocks() {
   }
   list.innerHTML = critical.slice(0, 20).map(function(product) {
     var key = encodeURIComponent(productKey(product));
-    return '<div class="critical-stock-row"><button onclick="openProductByEncodedKey(\'' + key + '\')">' +
+    return '<div class="critical-stock-row"><button data-action="openProductByEncodedKey" data-args="' + encodeURIComponent(JSON.stringify([decodeURIComponent(key)])) + '">' +
       escapeHtml(product.name) + '</button><span>' + escapeHtml(product.sheet) + '</span><strong>' +
       (Number(product.stock) <= 0 ? 'Tükendi' : product.stock + ' adet') + '</strong></div>';
   }).join('');
@@ -983,13 +983,13 @@ function renderQuickLists() {
   var favoriteItems = Object.keys(grouped).map(function(group) {
     var chips = grouped[group].slice(0, 6).map(function(key) {
       var product = products.find(function(item){ return productKey(item) === key; });
-      return product ? '<button class="product-chip favorite" onclick="openProductByEncodedKey(\'' + encodeURIComponent(key) + '\')">★ ' + escapeHtml(product.name) + '</button>' : '';
+      return product ? '<button class="product-chip favorite" data-action="openProductByEncodedKey" data-args="' + encodeURIComponent(JSON.stringify([encodeURIComponent(key)])) + '">★ ' + escapeHtml(product.name) + '</button>' : '';
     }).join('');
     return chips ? '<span class="favorite-group-title">' + escapeHtml(group) + '</span>' + chips : '';
   }).join('');
   var recentItems = recentProducts.slice(0, 4).map(function(key) {
     var product = products.find(function(item){ return productKey(item) === key; });
-    return product && !favorites.includes(key) ? '<button class="product-chip" onclick="openProductByEncodedKey(\'' + encodeURIComponent(key) + '\')">' + escapeHtml(product.name) + '</button>' : '';
+    return product && !favorites.includes(key) ? '<button class="product-chip" data-action="openProductByEncodedKey" data-args="' + encodeURIComponent(JSON.stringify([encodeURIComponent(key)])) + '">' + escapeHtml(product.name) + '</button>' : '';
   }).join('');
   el.innerHTML = favoriteItems + recentItems || '<span class="quick-empty">Henüz favori veya son arama yok.</span>';
 }
@@ -1065,7 +1065,7 @@ function search(q) {
   var html = '<div class="sug-count">' + (fuzzyUsed ? 'Benzer ' : '') + matches.length + ' eşleşme — seçin:</div>';
   html += matches.slice(0, 30).map(function(p) {
     var idx = products.indexOf(p);
-    return '<button type="button" class="sug-item" onclick="selectProduct(' + idx + ')">' +
+    return '<button type="button" class="sug-item" data-action="selectProduct" data-args="' + encodeURIComponent(JSON.stringify([idx])) + '">' +
       '<span class="sug-name">' + escapeHtml(p.name) +
         '<br><span class="sug-barcode">' + escapeHtml(p.sheet) +
         (p.barcode ? ' · ' + escapeHtml(p.barcode) : '') + '</span>' +
@@ -1155,10 +1155,10 @@ function renderBasket() {
     total += sub;
     return '<tr class="item-row"><td>' + escapeHtml(item.name) + '</td>' +
       '<td>' + escapeHtml(formatPrice(item.price)) + '</td>' +
-      '<td><span class="basket-qty"><button onclick="changeBasketQty(' + idx + ', -1)" aria-label="Adedi azalt">−</button>' +
-      '<strong>' + item.qty + '</strong><button onclick="changeBasketQty(' + idx + ', 1)" aria-label="Adedi artır">+</button></span></td>' +
+      '<td><span class="basket-qty"><button data-action="changeBasketQty" data-args="' + encodeURIComponent(JSON.stringify([idx, -1])) + '" aria-label="Adedi azalt">−</button>' +
+            '<strong>' + item.qty + '</strong><button data-action="changeBasketQty" data-args="' + encodeURIComponent(JSON.stringify([idx, 1])) + '" aria-label="Adedi artır">+</button></span></td>' +
       '<td>' + (item.price != null ? formatPrice(sub) : '—') + '</td>' +
-      '<td><button class="del-btn" onclick="removeFromBasket(' + idx + ')">✕</button></td></tr>';
+      '<td><button class="del-btn" data-action="removeFromBasket" data-args="' + encodeURIComponent(JSON.stringify([idx])) + '">✕</button></td></tr>';
   }).join('');
 
   var iskonto       = total * (iskontoOrani / 100);
@@ -1226,8 +1226,8 @@ function renderSavedBaskets() {
     return '<div class="saved-row">' +
       '<div class="saved-copy"><strong>' + escapeHtml(saved.name) + '</strong><span>' +
       new Date(saved.date).toLocaleString('tr-TR') + ' · ' + count + ' ürün</span></div>' +
-      '<button class="mini-btn" onclick="restoreSavedBasket(' + saved.id + ')">Aç</button>' +
-      '<button class="mini-btn danger" onclick="deleteSavedBasket(' + saved.id + ')">Sil</button></div>';
+      '<button class="mini-btn" data-action="restoreSavedBasket" data-args="' + encodeURIComponent(JSON.stringify([saved.id])) + '">Aç</button>' +
+            '<button class="mini-btn danger" data-action="deleteSavedBasket" data-args="' + encodeURIComponent(JSON.stringify([saved.id])) + '">Sil</button></div>';
   }).join('');
 }
 
@@ -1387,9 +1387,7 @@ function renderOfferHistory() {
   el.innerHTML = offerHistory.map(function(offer) {
     return '<div class="saved-row"><div class="saved-copy"><strong>' + escapeHtml(offer.id + ' · ' + offer.customer) +
       '</strong><span>' + new Date(offer.date).toLocaleString('tr-TR') + ' · ' + escapeHtml(formatPrice(offer.total)) +
-      '</span></div><button class="mini-btn" onclick="copySavedOffer(\'' + encodeURIComponent(offer.id) +
-      '\')">Kopyala</button><button class="mini-btn danger" onclick="deleteOfferHistory(\'' +
-      encodeURIComponent(offer.id) + '\')">Sil</button></div>';
+      '</span></div><button class="mini-btn" data-action="copySavedOffer" data-args="' + encodeURIComponent(JSON.stringify([encodeURIComponent(offer.id)])) + '">Kopyala</button><button class="mini-btn danger" data-action="deleteOfferHistory" data-args="' + encodeURIComponent(JSON.stringify([encodeURIComponent(offer.id)])) + '">Sil</button></div>';
   }).join('');
 }
 
@@ -1474,7 +1472,8 @@ function printOffer() {
   try {
     var html = '<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
       '<style>body{font-family:Arial,sans-serif;color:#142033;padding:72px 24px 40px;line-height:1.6;background:#f4f7fb}.back-btn{position:fixed;top:14px;left:14px;z-index:10;display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #cbd9e8;border-radius:999px;background:#fff;color:#12345a;box-shadow:0 8px 22px rgba(18,52,90,.14);font-weight:700;cursor:pointer}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px;margin:0 auto;background:#fff}h1{color:#12345a;margin:0 0 20px}small{color:#718099}@media print{body{padding:0;background:#fff}.back-btn{display:none}.box{border:0;padding:0;max-width:none}}</style></head>' +
-      '<body><button class="back-btn" type="button" onclick="window.close()" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
+      '<body><button class="back-btn" type="button" id="printBackBtn" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
+      '<script>(function(){try{var b=document.getElementById("printBackBtn"); if(b) b.addEventListener("click", function(){ window.close(); });}catch(e){}})();</script>' +
       '</body></html>';
 
     var blob = new Blob([html], { type: 'text/html' });
@@ -1702,49 +1701,75 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
 });
 
 // Bind elements with inline onclick to addEventListener where possible.
-// Supports simple calls like fn(), fn(123), fn('str'), fn(this), fn(123, 'a', this).
+// Supports simple calls like fn(), fn(123), fn('str'), fn(this), fn(123, 'a', this),
+// multiple statements separated by semicolons, and simple DOM method calls like document.getElementById('id').focus().
 (function bindInlineOnclicks(){
   try {
     var elements = Array.from(document.querySelectorAll('[onclick]'));
     elements.forEach(function(el){
       var attr = el.getAttribute('onclick') || '';
-      // Match functionName(arg1, arg2, ...)
-      var callMatch = attr.replace(/;\s*$/, '').trim().match(/^\s*([A-Za-z0-9_$]+)\s*\((.*)\)\s*$/);
-      if (!callMatch) return;
-      var fnName = callMatch[1];
-      var argsText = callMatch[2].trim();
-      var fn = window[fnName];
-      if (typeof fn !== 'function') return;
+      // Split into semicolon-separated statements and parse each
+      var statements = attr.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+      if (!statements.length) return;
 
-      // Parse arguments (numbers, quoted strings, this). Skip if complex.
-      var args = [];
-      if (argsText.length > 0) {
-        // Split by commas not inside quotes
-        var parts = argsText.match(/('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|[^,]+)/g);
-        if (!parts) return;
-        for (var i = 0; i < parts.length; i++) {
-          var p = parts[i].trim();
-          if (/^this$/i.test(p)) { args.push(function(el){ return function(){ return el; }; }(el)); continue; }
-          if (/^[-+]?[0-9]*\.?[0-9]+$/.test(p)) { args.push(Number(p)); continue; }
-          var mstr = p.match(/^['"]([\s\S]*)['"]$/);
-          if (mstr) { args.push(mstr[1].replace(/\\(['"])/g,'$1')); continue; }
-          // Unsupported arg expression — abort binding for this element to avoid unsafe eval
-          return;
+      var handlers = [];
+      var unsafe = false;
+
+      for (var si = 0; si < statements.length; si++) {
+        var stmt = statements[si];
+        // functionName(args)
+        var fnCall = stmt.match(/^\s*([A-Za-z0-9_$]+)\s*\((.*)\)\s*$/);
+        if (fnCall) {
+          var fnName = fnCall[1];
+          var argsText = fnCall[2].trim();
+          var fn = window[fnName];
+          if (typeof fn !== 'function') { unsafe = true; break; }
+
+          var parsedArgs = [];
+          if (argsText.length > 0) {
+            var parts = argsText.match(/('(?:\\'|[^'])*'|\"(?:\\\"|[^\"])*\"|[^,]+)/g);
+            if (!parts) { unsafe = true; break; }
+            for (var pi = 0; pi < parts.length; pi++) {
+              var p = parts[pi].trim();
+              if (/^this$/i.test(p)) { parsedArgs.push(function(el){ return function(){ return el; }; }(el)); continue; }
+              if (/^[-+]?[0-9]*\.?[0-9]+$/.test(p)) { parsedArgs.push(Number(p)); continue; }
+              var mstr = p.match(/^['\"]([\s\S]*)['\"]$/);
+              if (mstr) { parsedArgs.push(mstr[1].replace(/\\(['\"]) /g,'$1')); continue; }
+              unsafe = true; break;
+            }
+            if (unsafe) break;
+          }
+
+          (function(fn, parsedArgs){
+            handlers.push(function(e){
+              var resolved = parsedArgs.map(function(a){ return (typeof a === 'function' && a.length === 0) ? a() : a; });
+              try { fn.apply(el, resolved.length ? resolved : [e]); } catch (err) { console.error('delegated fn error', err); }
+            });
+          })(fn, parsedArgs);
+          continue;
         }
+
+        // document.getElementById('id').method()
+        var domMethod = stmt.match(/^\s*document\.getElementById\(['\"]([^'\"]+)['\"]\)\.([A-Za-z0-9_$]+)\s*\(\s*\)\s*$/);
+        if (domMethod) {
+          (function(id, method){ handlers.push(function(){ try { var t = document.getElementById(id); if (t && typeof t[method] === 'function') t[method](); } catch(e){ console.error('dom method error', e); } }); })(domMethod[1], domMethod[2]);
+          continue;
+        }
+
+        // Unsupported statement
+        unsafe = true; break;
       }
 
-      var marker = 'data-bound-' + fnName;
-      if (el.hasAttribute(marker)) return;
+      if (unsafe || !handlers.length) return; // skip complex onclicks for safety
 
+      var marker = 'data-bound-inline';
+      if (el.hasAttribute(marker)) return;
       el.addEventListener('click', function(e){
-        try {
-          // Resolve any 'this' placeholders (we stored as functions)
-          var resolvedArgs = args.map(function(a){ return (typeof a === 'function' && a.length === 0) ? a() : a; });
-          fn.apply(el, resolvedArgs.length ? resolvedArgs : [e]);
-        } catch (err) { console.error('bound click error', err); }
+        for (var h = 0; h < handlers.length; h++) {
+          try { handlers[h](e); } catch(err) { console.error('handler error', err); }
+        }
       });
       el.setAttribute(marker, '1');
-      // Remove inline onclick to improve CSP compatibility
       el.removeAttribute('onclick');
     });
   } catch (e) { console.warn('bindInlineOnclicks failed', e); }
@@ -1752,6 +1777,43 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
 
   }
 });
+
+// Delegated handler for data-action/data-args attributes
+(function addDataActionDelegation(){
+  function resolveArg(arg, hostEl){
+    try {
+      if (arg === '__THIS__') return hostEl;
+      if (typeof arg === 'string' && arg.indexOf('__QUERY__:') === 0) return document.querySelector(arg.slice(10));
+    } catch(e) { /* ignore */ }
+    return arg;
+  }
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    var action = el.getAttribute('data-action');
+    if (!action) return;
+    e.preventDefault();
+    var args = [];
+    var argsAttr = el.getAttribute('data-args');
+    if (argsAttr) {
+      try { args = JSON.parse(argsAttr); } catch(err){ args = [argsAttr]; }
+    }
+    args = args.map(function(a){ return resolveArg(a, el); });
+    var fn = window[action];
+    try {
+      if (typeof fn === 'function') fn.apply(el, args);
+    } catch(err) { console.error('data-action handler error', err); }
+    var postFocus = el.getAttribute('data-post-focus');
+    if (postFocus) {
+      var t = document.querySelector(postFocus);
+      if (t && typeof t.focus === 'function') t.focus();
+    }
+    var postAction = el.getAttribute('data-post-action');
+    if (postAction && typeof window[postAction] === 'function') {
+      try { window[postAction].call(el); } catch(err){ console.error('post action error', err); }
+    }
+  }, false);
+})();
 
 function stopCam() {
   if (reader) { reader.reset(); reader = null; }

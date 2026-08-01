@@ -37,14 +37,14 @@
         <img class="magmaweld-logo" src="magmaweld-logo.png" alt="Magmaweld" width="360" height="74" decoding="async">
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
-          <button class="refresh-btn" id="refreshDataBtn" onclick="refreshData()">↻ Veriyi yenile</button>
-          <button class="add-product-btn" id="addProductBtn" onclick="openAddProductModal()" aria-label="Envantere yeni ürün ekle">＋ Ürün ekle</button>
+          <button class="refresh-btn" id="refreshDataBtn">↻ Veriyi yenile</button>
+          <button class="add-product-btn" id="addProductBtn" aria-label="Envantere yeni ürün ekle">＋ Ürün ekle</button>
           <details class="utility-menu">
             <summary aria-label="Hesap ve ayarlar">•••</summary>
             <div class="utility-menu-panel">
-              <button class="utility-action" id="themeBtn" onclick="toggleTheme()">Tema değiştir</button>
-              <button class="utility-action" id="adminCenterBtn" onclick="openAdminModal()">Yönetim merkezi</button>
-              <button class="utility-action account-btn" id="accountBtn" onclick="signOut()" title="Google oturumunu kapat">
+              <button class="utility-action" id="themeBtn">Tema değiştir</button>
+              <button class="utility-action" id="adminCenterBtn">Yönetim merkezi</button>
+              <button class="utility-action account-btn" id="accountBtn" title="Google oturumunu kapat">
                 <span id="accountEmail">Google hesabı</span> · Çıkış
               </button>
               <button class="utility-action install-btn" id="installBtn">Uygulamayı yükle</button>
@@ -57,8 +57,8 @@
   </header>
 
   <nav class="tabs" aria-label="Ana bölümler" role="tablist">
-    <button class="tab active" id="sorguTab" role="tab" aria-selected="true" aria-controls="tab-sorgu" onclick="showTab('sorgu')">⌕ &nbsp;Sorgulama</button>
-    <button class="tab inactive" role="tab" aria-selected="false" aria-controls="tab-sepet" onclick="showTab('sepet')" id="sepetTab">🛒 &nbsp;Sepet</button>
+    <button class="tab active" id="sorguTab" role="tab" aria-selected="true" aria-controls="tab-sorgu">⌕ &nbsp;Sorgulama</button>
+    <button class="tab inactive" role="tab" aria-selected="false" aria-controls="tab-sepet" id="sepetTab">🛒 &nbsp;Sepet</button>
   </nav>
 
   <section class="overview-grid" aria-label="Envanter özeti">
@@ -87,7 +87,7 @@
     </article>
   </section>
 
-  <button class="mobile-basket-summary" id="mobileBasketSummary" type="button" onclick="showTab('sepet')" aria-label="Sepeti aç">
+  <button class="mobile-basket-summary" id="mobileBasketSummary" type="button" aria-label="Sepeti aç">
     <span><small>SEPET</small><strong id="mobileBasketItems">0 ürün</strong></span>
     <strong id="mobileBasketTotal">0,00 ₺</strong>
   </button>
@@ -128,7 +128,7 @@
             </select>
             <input type="number" id="minPriceFilter" min="0" placeholder="Min. fiyat" aria-label="Minimum fiyat">
             <input type="number" id="maxPriceFilter" min="0" placeholder="Maks. fiyat" aria-label="Maksimum fiyat">
-            <button class="mini-btn" type="button" onclick="clearAdvancedFilters()">Filtreleri temizle</button>
+            <button class="mini-btn" type="button" data-action="clearAdvancedFilters">Filtreleri temizle</button>
           </div>
         </details>
         <div id="suggestions" class="suggestions" aria-live="polite"></div>
@@ -181,8 +181,8 @@
         </div>
         <div class="result-actions">
           <span class="source-pill" id="resSource">Kaynak seçildiğinde burada görünür</span>
-          <button class="detail-btn" id="detailBtn" onclick="openProductDetail()" disabled>Detay</button>
-          <button class="favorite-btn" id="favoriteBtn" onclick="toggleCurrentFavorite()" aria-label="Favorilere ekle">☆</button>
+          <button class="detail-btn" id="detailBtn" data-action="openProductDetail" disabled>Detay</button>
+          <button class="favorite-btn" id="favoriteBtn" data-action="toggleCurrentFavorite" aria-label="Favorilere ekle">☆</button>
         </div>
       </section>
 
@@ -190,17 +190,17 @@
         <div class="qty-row">
           <label for="qtyInput">ADET</label>
           <div class="qty-control">
-            <button class="qty-btn" onclick="changeQty(-1)" aria-label="Adedi azalt">−</button>
+            <button class="qty-btn" data-action="changeQty" data-args="[-1]" aria-label="Adedi azalt">−</button>
             <input type="number" id="qtyInput" value="1" min="1" max="9999" />
-            <button class="qty-btn" onclick="changeQty(1)" aria-label="Adedi artır">+</button>
+            <button class="qty-btn" data-action="changeQty" data-args="[1]" aria-label="Adedi artır">+</button>
           </div>
           <div class="qty-presets">
-            <button class="qty-preset" onclick="setQty(1)">1</button>
-            <button class="qty-preset" onclick="setQty(5)">5</button>
-            <button class="qty-preset" onclick="setQty(10)">10</button>
+            <button class="qty-preset" data-action="setQty" data-args="[1]">1</button>
+            <button class="qty-preset" data-action="setQty" data-args="[5]">5</button>
+            <button class="qty-preset" data-action="setQty" data-args="[10]">10</button>
           </div>
         </div>
-        <button class="add-btn" id="addBtn" disabled onclick="addToBasket()">Sepete ekle&nbsp; →</button>
+        <button class="add-btn" id="addBtn" disabled data-action="addToBasket">Sepete ekle&nbsp; →</button>
         <p class="info" id="infoBox">Veriler yükleniyor...</p>
       </section>
     </div>
@@ -213,13 +213,13 @@
       <section class="iskonto-sec">
         <div class="label">İSKONTO ORANI</div>
         <div class="iskonto-btns">
-          <button class="isk-btn active" onclick="setIskonto(0, this)">%0</button>
-          <button class="isk-btn" onclick="setIskonto(5, this)">%5</button>
-          <button class="isk-btn" onclick="setIskonto(10, this)">%10</button>
-          <button class="isk-btn" onclick="setIskonto(15, this)">%15</button>
-          <button class="isk-btn" onclick="setIskonto(20, this)">%20</button>
-          <button class="isk-btn" onclick="setIskonto(25, this)">%25</button>
-          <button class="isk-btn" onclick="setIskonto(30, this)">%30</button>
+          <button class="isk-btn active" data-action="setIskonto" data-args='[0, "__THIS__"]'>%0</button>
+          <button class="isk-btn" data-action="setIskonto" data-args='[5, "__THIS__"]'>%5</button>
+          <button class="isk-btn" data-action="setIskonto" data-args='[10, "__THIS__"]'>%10</button>
+          <button class="isk-btn" data-action="setIskonto" data-args='[15, "__THIS__"]'>%15</button>
+          <button class="isk-btn" data-action="setIskonto" data-args='[20, "__THIS__"]'>%20</button>
+          <button class="isk-btn" data-action="setIskonto" data-args='[25, "__THIS__"]'>%25</button>
+          <button class="isk-btn" data-action="setIskonto" data-args='[30, "__THIS__"]'>%30</button>
         </div>
         <div class="isk-custom">
           <span>Özel oran</span>
@@ -232,13 +232,13 @@
       </div>
       <div class="basket-save-row">
         <input type="text" id="basketSaveName" placeholder="Sepet adı (örn. ABC Metal)">
-        <button class="tool-btn" onclick="saveCurrentBasket()">Kaydet</button>
+        <button class="tool-btn" data-action="saveCurrentBasket">Kaydet</button>
       </div>
       <div class="basket-actions">
-        <button class="tool-btn" onclick="setIskonto(0, document.querySelector('.isk-btn'))">İskontoyu sıfırla</button>
-        <button class="tool-btn primary" onclick="openOfferModal()">Teklif oluştur</button>
+        <button class="tool-btn" data-action="setIskonto" data-args='[0, "__QUERY__:.isk-btn"]'>İskontoyu sıfırla</button>
+        <button class="tool-btn primary" data-action="openOfferModal">Teklif oluştur</button>
       </div>
-      <button class="clear-btn" onclick="clearBasket()">Sepeti temizle</button>
+      <button class="clear-btn" data-action="clearBasket">Sepeti temizle</button>
       <section class="card saved-card">
         <div class="quick-head">
           <strong>Kayıtlı sepetler</strong>
@@ -254,8 +254,8 @@
           <span>Excel ve PDF</span>
         </div>
         <div class="export-actions">
-          <button class="tool-btn" onclick="exportBasketCsv()">Sepeti Excel’e aktar</button>
-          <button class="tool-btn" onclick="printOffer()">Teklifi PDF yap</button>
+          <button class="tool-btn" data-action="exportBasketCsv">Sepeti Excel’e aktar</button>
+          <button class="tool-btn" data-action="printOffer">Teklifi PDF yap</button>
         </div>
       </section>
       <section class="card saved-card">
@@ -279,14 +279,14 @@
         <span class="offer-number" id="offerNumber">Teklif numarası hazırlanıyor</span>
         <p>Müşteri bilgilerini ekleyin, yazdırın veya WhatsApp’tan paylaşın.</p>
       </div>
-      <button class="modal-close" onclick="closeOfferModal()" aria-label="Kapat">×</button>
+      <button class="modal-close" data-action="closeOfferModal" aria-label="Kapat">×</button>
     </div>
     <div class="form-grid">
       <div class="form-field">
         <label for="customerName">MÜŞTERİ / FİRMA</label>
         <input type="text" id="customerName" list="customerProfiles" placeholder="Örn. ABC Metal">
         <datalist id="customerProfiles"></datalist>
-        <button class="profile-save" type="button" onclick="saveCustomerProfile()">Müşteriyi ve iskontoyu kaydet</button>
+        <button class="profile-save" type="button" data-action="saveCustomerProfile">Müşteriyi ve iskontoyu kaydet</button>
       </div>
       <div class="form-field">
         <label for="offerValidity">GEÇERLİLİK TARİHİ</label>
@@ -299,10 +299,10 @@
     </div>
     <div class="offer-summary" id="offerSummary">Sepet bilgileri hazırlanıyor...</div>
     <div class="offer-actions">
-      <button class="offer-save" onclick="saveOfferHistory()">Teklifi kaydet</button>
-      <button class="offer-print" onclick="printOffer()">Yazdır / PDF</button>
-      <button class="offer-whatsapp" onclick="shareOffer()">WhatsApp</button>
-      <button class="offer-copy" onclick="copyOffer()">Metni kopyala</button>
+      <button class="offer-save" data-action="saveOfferHistory">Teklifi kaydet</button>
+      <button class="offer-print" data-action="printOffer">Yazdır / PDF</button>
+      <button class="offer-whatsapp" data-action="shareOffer">WhatsApp</button>
+      <button class="offer-copy" data-action="copyOffer">Metni kopyala</button>
     </div>
   </div>
 </div>
@@ -315,7 +315,7 @@
         <h2 id="addProductTitle">Yeni ürün ekle</h2>
         <p>Ürün, seçtiğiniz Google Sheets sayfasına doğrudan eklenir.</p>
       </div>
-      <button class="modal-close" type="button" onclick="closeAddProductModal()" aria-label="Kapat">×</button>
+      <button class="modal-close" type="button" data-action="closeAddProductModal" aria-label="Kapat">×</button>
     </div>
     <form id="addProductForm" onsubmit="submitAddProduct(event)">
       <div class="form-grid">
@@ -360,7 +360,7 @@
       <p class="add-product-sheet-hint" id="newProductSheetHint">Stok bilgisi Envanter sayfasına kaydedilir.</p>
       <p class="add-product-currency-hint" id="newProductCurrencyHint">TL fiyatı doğrudan kaydedilir.</p>
       <div class="add-product-actions">
-        <button class="product-cancel-btn" type="button" onclick="closeAddProductModal()">Vazgeç</button>
+        <button class="product-cancel-btn" type="button" data-action="closeAddProductModal">Vazgeç</button>
         <button class="product-save-btn" id="saveProductBtn" type="submit">＋ Ürünü kaydet</button>
       </div>
     </form>
@@ -375,7 +375,7 @@
         <h2 id="productDetailTitle">Ürün bilgileri</h2>
         <p id="detailCategory">Kategori bilgisi</p>
       </div>
-      <button class="modal-close" onclick="closeProductDetail()" aria-label="Kapat">×</button>
+      <button class="modal-close" data-action="closeProductDetail" aria-label="Kapat">×</button>
     </div>
     <div class="detail-price" id="detailPrice">—</div>
     <div class="detail-grid">
@@ -393,9 +393,9 @@
         <option value="Kaynak makineleri"></option>
         <option value="Sarf malzemeleri"></option>
       </datalist>
-      <button class="tool-btn" onclick="saveFavoriteGroup()">Gruba kaydet</button>
+      <button class="tool-btn" data-action="saveFavoriteGroup">Gruba kaydet</button>
     </div>
-    <button class="tool-btn primary detail-add" onclick="closeProductDetail(); document.getElementById('addBtn').focus()">Sepete ekleme alanına dön</button>
+    <button class="tool-btn primary detail-add" data-action="closeProductDetail" data-post-focus="#addBtn">Sepete ekleme alanına dön</button>
   </div>
 </div>
 
@@ -407,22 +407,22 @@
         <h2 id="adminTitle">Yönetim merkezi</h2>
         <p>Ürün düzenleme yetkisi Google hesabınız üzerinden kontrol edilir.</p>
       </div>
-      <button class="modal-close" onclick="closeAdminModal()" aria-label="Kapat">×</button>
+      <button class="modal-close" data-action="closeAdminModal" aria-label="Kapat">×</button>
     </div>
     <div class="admin-grid">
       <a class="admin-action primary" href="https://docs.google.com/spreadsheets/d/18hZzuWA2BKES85qMrFylNsDawM81QKWTJF84xJAlM4U/edit" target="_blank" rel="noopener">
         <strong>Ürün ve stokları düzenle</strong>
         <span>Yetkili Google Sheets dosyasını açar</span>
       </a>
-      <button class="admin-action" onclick="exportProductsCsv()">
+      <button class="admin-action" data-action="exportProductsCsv">
         <strong>Tüm ürünleri Excel’e aktar</strong>
         <span>Güncel ürün listesinin yedeğini indirir</span>
       </button>
-      <button class="admin-action" onclick="refreshData(); closeAdminModal()">
+      <button class="admin-action" data-action="refreshData" data-post-action="closeAdminModal">
         <strong>Verileri şimdi yenile</strong>
         <span>Google Sheets kayıtlarını tekrar okur</span>
       </button>
-      <button class="admin-action" onclick="openAccessModal()">
+      <button class="admin-action" data-action="openAccessModal">
         <strong>＋ Erişim izni ver</strong>
         <span>E-posta adresiyle yeni bir görüntüleme yetkisi ekler</span>
       </button>
@@ -439,7 +439,7 @@
         <h2 id="accessTitle">Erişim izni ver</h2>
         <p>Eklediğiniz kişi kendi Google hesabıyla envantere giriş yapabilir.</p>
       </div>
-      <button class="modal-close" type="button" onclick="closeAccessModal()" aria-label="Kapat">×</button>
+      <button class="modal-close" type="button" data-action="closeAccessModal" aria-label="Kapat">×</button>
     </div>
     <form id="accessForm" onsubmit="submitAccessGrant(event)">
       <div class="form-field">
@@ -448,7 +448,7 @@
       </div>
       <p class="access-note">Bu izin envanteri görüntüleme ve teklif hazırlama içindir. Ürün ekleme ve yetki verme hakkı yalnızca yönetici hesabında kalır.</p>
       <div class="add-product-actions">
-        <button class="product-cancel-btn" type="button" onclick="closeAccessModal()">Vazgeç</button>
+        <button class="product-cancel-btn" type="button" data-action="closeAccessModal">Vazgeç</button>
         <button class="product-save-btn" id="saveAccessBtn" type="submit">Erişim izni ver</button>
       </div>
     </form>
