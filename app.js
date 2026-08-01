@@ -1,6 +1,7 @@
 const GOOGLE_CLIENT_ID = '334267311865-5oqahpjifptf1j67httml63h0gvq0g38.apps.googleusercontent.com';
 const INVENTORY_API_URL = 'https://script.google.com/macros/s/AKfycbxyCdJ0btfjuZgGF5X0Up7ugD2qEMr-jQHVKtPp-MI466roWtnDb0hPweI71iknVOXBvA/exec';
 const AUTH_TOKEN_KEY = 'teknikelGoogleIdToken';
+const AUTO_SIGN_IN_KEY = 'teknikelAutoSignIn';
 const ADMIN_EMAIL = 'mustafaozllu@gmail.com';
 let googleIdToken = '';
 let signedInEmail = '';
@@ -35,6 +36,17 @@ function writeSession(key, value) {
   try {
     if (value) sessionStorage.setItem(key, value);
     else sessionStorage.removeItem(key);
+  } catch (e) {}
+}
+
+function readPersistentFlag(key) {
+  try { return localStorage.getItem(key) === '1'; } catch (e) { return false; }
+}
+
+function writePersistentFlag(key, enabled) {
+  try {
+    if (enabled) localStorage.setItem(key, '1');
+    else localStorage.removeItem(key);
   } catch (e) {}
 }
 
@@ -97,6 +109,7 @@ function unlockApp(token) {
   var payload = decodeGoogleCredential(token);
   googleIdToken = token;
   writeSession(AUTH_TOKEN_KEY, token);
+  writePersistentFlag(AUTO_SIGN_IN_KEY, true);
   document.body.classList.remove('auth-pending');
   document.getElementById('authGate').setAttribute('aria-hidden', 'true');
   document.getElementById('appShell').setAttribute('aria-hidden', 'false');
@@ -124,13 +137,14 @@ function scheduleTokenExpiryCheck() {
     // Sign out 10 seconds before expiry to avoid races
     var ms = expiresAt - Date.now() - 10000;
     if (ms <= 0) {
-      // Already expired or too close
-      showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+      showAuthGate('Oturum süresi doldu. Google oturumunuz yenileniyor…', false);
+      requestAutomaticSignIn();
       return;
     }
     _tokenExpiryTimer = setTimeout(function() {
       try {
-        showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
+        showAuthGate('Oturum süresi doldu. Google oturumunuz yenileniyor…', false);
+        requestAutomaticSignIn();
       } catch (e) { console.error('token expiry handler', e); }
     }, ms);
   } catch (e) { console.error('scheduleTokenExpiryCheck', e); }
@@ -142,6 +156,7 @@ window.addEventListener('focus', function(){ scheduleTokenExpiryCheck(); });
 function handleGoogleCredential(response) {
   var token = response && response.credential ? response.credential : '';
   if (!isUsableCredential(token)) {
+    writePersistentFlag(AUTO_SIGN_IN_KEY, false);
     showAuthGate('Bu Google hesabının envantere erişim izni yok.', true);
     if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
     return;
@@ -150,14 +165,26 @@ function handleGoogleCredential(response) {
   unlockApp(token);
 }
 
+function requestAutomaticSignIn() {
+  if (!readPersistentFlag(AUTO_SIGN_IN_KEY)) return false;
+  if (!window.google || !google.accounts || !google.accounts.id) return false;
+  setAuthStatus('Google oturumunuz geri yükleniyor…', false);
+  google.accounts.id.prompt();
+  return true;
+}
+
 function renderGoogleSignIn() {
   if (authInitialized || !window.google || !google.accounts || !google.accounts.id) return false;
   authInitialized = true;
   google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: handleGoogleCredential,
-    auto_select: false,
-    cancel_on_tap_outside: false
+    auto_select: readPersistentFlag(AUTO_SIGN_IN_KEY),
+    cancel_on_tap_outside: false,
+    itp_support: true,
+    use_fedcm_for_prompt: true,
+    use_fedcm_for_button: true,
+    button_auto_select: true
   });
   google.accounts.id.renderButton(document.getElementById('googleSignInButton'), {
     type: 'standard',
@@ -178,8 +205,12 @@ function initializeAuth() {
     if (renderGoogleSignIn()) {
       clearInterval(timer);
       var storedToken = readSession(AUTH_TOKEN_KEY);
-      if (isUsableCredential(storedToken)) unlockApp(storedToken);
-      else showAuthGate('Yetkili Google hesabınızla giriş yapın.', false);
+      if (isUsableCredential(storedToken)) {
+        unlockApp(storedToken);
+      } else {
+        showAuthGate('Yetkili Google hesabınızla giriş yapın.', false);
+        requestAutomaticSignIn();
+      }
     } else if (attempts >= 80) {
       clearInterval(timer);
       showAuthGate('Google giriş sistemi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.', true);
@@ -214,8 +245,9 @@ function openLocalDesignPreview() {
 }
 
 function signOut() {
-  // Clear scheduled expiry checks and sign out
+  // Clear scheduled expiry checks and remembered automatic sign-in.
   clearTokenExpiryCheck();
+  writePersistentFlag(AUTO_SIGN_IN_KEY, false);
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
 }
@@ -1988,7 +2020,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.16').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.17').catch(function(){}); });
 }
 
 updateConnectionState();
