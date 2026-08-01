@@ -75,6 +75,25 @@ body.auth-pending .app {
   display: flex;
   justify-content: center;
 }
+.auth-alternative {
+  display: flex; align-items: center; gap: 10px;
+  margin: 14px 0 10px; color: #8a9aad;
+  font-size: 10px; font-weight: 800; text-transform: uppercase;
+}
+.auth-alternative::before, .auth-alternative::after {
+  content: ""; flex: 1; height: 1px; background: #dfe7f0;
+}
+.redirect-signin-btn {
+  width: min(100%, 300px); min-height: 50px;
+  display: grid; gap: 3px; margin: 0 auto; padding: 8px 14px;
+  border: 1px solid #cbd8e6; border-radius: 10px;
+  background: #f7faff; color: #173d5f; cursor: pointer;
+  text-align: center; box-shadow: 0 4px 12px rgba(31,78,121,.06);
+}
+.redirect-signin-btn:hover { border-color: #8fb4d8; background: #eef6ff; }
+.redirect-signin-btn:active { transform: translateY(1px); }
+.redirect-signin-btn strong { font-size: 12px; }
+.redirect-signin-btn small { color: #667a90; font-size: 10px; font-weight: 650; }
 
 .auth-status {
   min-height: 24px;
