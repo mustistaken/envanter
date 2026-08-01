@@ -223,7 +223,7 @@
         </div>
         <div class="isk-custom">
           <span>Özel oran</span>
-          <input type="number" id="iskontoCustom" min="0" max="100" placeholder="0" oninput="setIskontoCustom(this.value)" />
+          <input type="number" id="iskontoCustom" min="0" max="100" placeholder="0" />
           <span>%</span>
         </div>
       </section>
@@ -317,7 +317,7 @@
       </div>
       <button class="modal-close" type="button" data-action="closeAddProductModal" aria-label="Kapat">×</button>
     </div>
-    <form id="addProductForm" onsubmit="submitAddProduct(event)">
+    <form id="addProductForm">
       <div class="form-grid">
         <div class="form-field">
           <label for="newProductCode">ÜRÜN KODU</label>
@@ -337,7 +337,7 @@
         </div>
         <div class="form-field">
           <label for="newProductCurrency">PARA BİRİMİ</label>
-          <select id="newProductCurrency" name="currency" onchange="updateAddProductCurrencyHint()" required>
+          <select id="newProductCurrency" name="currency" required>
             <option value="TRY">TL (₺)</option>
             <option value="EUR">Euro (€)</option>
             <option value="USD">Dolar ($)</option>
@@ -346,7 +346,7 @@
       </div>
       <div class="add-product-destination">
         <label for="newProductSheet">KAYIT YERİ</label>
-        <select id="newProductSheet" name="sheet" onchange="updateAddProductSheetFields()" required>
+        <select id="newProductSheet" name="sheet" required>
           <option value="Envanter">Envanter</option>
           <option value="Trafimet">Trafimet</option>
           <option value="MW Torç ve Sarfları">MW Torç ve Sarfları</option>
@@ -441,7 +441,7 @@
       </div>
       <button class="modal-close" type="button" data-action="closeAccessModal" aria-label="Kapat">×</button>
     </div>
-    <form id="accessForm" onsubmit="submitAccessGrant(event)">
+    <form id="accessForm">
       <div class="form-field">
         <label for="accessEmail">GOOGLE HESABI E-POSTASI</label>
         <input type="email" id="accessEmail" name="email" maxlength="254" required autocomplete="email" placeholder="ornek@gmail.com">
@@ -467,6 +467,6 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.14"></script>
+<script src="app.js?v=14.15"></script>
 </body>
 </html>
