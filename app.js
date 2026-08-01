@@ -715,9 +715,18 @@ async function submitAddProduct(event) {
 function populateCategories() {
   var select = document.getElementById('categoryFilter');
   var current = select.value;
-  select.innerHTML = '<option value="">Tüm kategoriler</option>' + SHEETS.map(function(s) {
-    return '<option value="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</option>';
-  }).join('');
+  // Rebuild options safely using DOM methods
+  while (select.firstChild) select.removeChild(select.firstChild);
+  var defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Tüm kategoriler';
+  select.appendChild(defaultOpt);
+  SHEETS.forEach(function(s){
+    var opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = s.name;
+    select.appendChild(opt);
+  });
   select.value = current;
 }
 
@@ -730,9 +739,18 @@ function populateBrands() {
     if (brand) counts[brand] = (counts[brand] || 0) + 1;
   });
   var brands = Object.keys(counts).sort(function(a, b){ return a.localeCompare(b, 'tr'); });
-  select.innerHTML = '<option value="">Tüm markalar</option>' + brands.map(function(brand) {
-    return '<option value="' + escapeHtml(brand) + '">' + escapeHtml(brand) + '</option>';
-  }).join('');
+  // Rebuild options safely
+  while (select.firstChild) select.removeChild(select.firstChild);
+  var defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Tüm markalar';
+  select.appendChild(defaultOpt);
+  brands.forEach(function(brand){
+    var opt = document.createElement('option');
+    opt.value = brand;
+    opt.textContent = brand;
+    select.appendChild(opt);
+  });
   select.value = brands.includes(current) ? current : '';
 }
 
@@ -768,16 +786,26 @@ function renderCriticalStocks() {
   document.getElementById('criticalStockCount').textContent = critical.length ? critical.length + ' kritik ürün' : 'Kritik stok yok';
   var statEl = document.getElementById('statCriticalCount');
   if (statEl) statEl.textContent = critical.length ? critical.length + ' ürün' : 'Yok';
+  while (list.firstChild) list.removeChild(list.firstChild);
   if (!critical.length) {
-    list.innerHTML = '<span class="quick-empty">Kritik seviyede ürün bulunmuyor.</span>';
+    var empty = document.createElement('span');
+    empty.className = 'quick-empty';
+    empty.textContent = 'Kritik seviyede ürün bulunmuyor.';
+    list.appendChild(empty);
     return;
   }
-  list.innerHTML = critical.slice(0, 20).map(function(product) {
-    var key = encodeURIComponent(productKey(product));
-    return '<div class="critical-stock-row"><button data-action="openProductByEncodedKey" data-args="' + encodeURIComponent(JSON.stringify([decodeURIComponent(key)])) + '">' +
-      escapeHtml(product.name) + '</button><span>' + escapeHtml(product.sheet) + '</span><strong>' +
-      (Number(product.stock) <= 0 ? 'Tükendi' : product.stock + ' adet') + '</strong></div>';
-  }).join('');
+  critical.slice(0,20).forEach(function(product){
+    var row = document.createElement('div');
+    row.className = 'critical-stock-row';
+    var btn = document.createElement('button');
+    btn.setAttribute('data-action','openProductByEncodedKey');
+    btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(productKey(product))])));
+    btn.textContent = product.name;
+    var sp = document.createElement('span'); sp.textContent = product.sheet;
+    var strong = document.createElement('strong'); strong.textContent = Number(product.stock) <= 0 ? 'Tükendi' : product.stock + ' adet';
+    row.appendChild(btn); row.appendChild(sp); row.appendChild(strong);
+    list.appendChild(row);
+  });
 }
 
 function formatDate(val) {
@@ -974,24 +1002,45 @@ function openProductByEncodedKey(encodedKey) {
 
 function renderQuickLists() {
   var el = document.getElementById('quickLists');
+  while (el.firstChild) el.removeChild(el.firstChild);
   var grouped = {};
   favorites.forEach(function(key) {
     var group = favoriteGroups[key] || 'Favoriler';
     if (!grouped[group]) grouped[group] = [];
     grouped[group].push(key);
   });
-  var favoriteItems = Object.keys(grouped).map(function(group) {
-    var chips = grouped[group].slice(0, 6).map(function(key) {
+  var any = false;
+  Object.keys(grouped).forEach(function(group) {
+    var title = document.createElement('span'); title.className = 'favorite-group-title';
+    title.textContent = group;
+    var chips = document.createElement('div');
+    grouped[group].slice(0,6).forEach(function(key){
       var product = products.find(function(item){ return productKey(item) === key; });
-      return product ? '<button class="product-chip favorite" data-action="openProductByEncodedKey" data-args="' + encodeURIComponent(JSON.stringify([encodeURIComponent(key)])) + '">★ ' + escapeHtml(product.name) + '</button>' : '';
-    }).join('');
-    return chips ? '<span class="favorite-group-title">' + escapeHtml(group) + '</span>' + chips : '';
-  }).join('');
-  var recentItems = recentProducts.slice(0, 4).map(function(key) {
+      if (!product) return;
+      any = true;
+      var btn = document.createElement('button'); btn.className = 'product-chip favorite';
+      btn.setAttribute('data-action','openProductByEncodedKey');
+      btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(key)])));
+      btn.textContent = '★ ' + product.name;
+      chips.appendChild(btn);
+    });
+    if (chips.childNodes.length) { el.appendChild(title); el.appendChild(chips); }
+  });
+  recentProducts.slice(0,4).forEach(function(key){
+    if (favorites.includes(key)) return;
     var product = products.find(function(item){ return productKey(item) === key; });
-    return product && !favorites.includes(key) ? '<button class="product-chip" data-action="openProductByEncodedKey" data-args="' + encodeURIComponent(JSON.stringify([encodeURIComponent(key)])) + '">' + escapeHtml(product.name) + '</button>' : '';
-  }).join('');
-  el.innerHTML = favoriteItems + recentItems || '<span class="quick-empty">Henüz favori veya son arama yok.</span>';
+    if (!product) return;
+    any = true;
+    var btn = document.createElement('button'); btn.className = 'product-chip';
+    btn.setAttribute('data-action','openProductByEncodedKey');
+    btn.setAttribute('data-args', encodeURIComponent(JSON.stringify([encodeURIComponent(key)])));
+    btn.textContent = product.name;
+    el.appendChild(btn);
+  });
+  if (!any) {
+    var empty = document.createElement('span'); empty.className = 'quick-empty'; empty.textContent = 'Henüz favori veya son arama yok.';
+    el.appendChild(empty);
+  }
 }
 
 function search(q) {
@@ -1143,36 +1192,54 @@ function clearBasket() {
 
 function renderBasket() {
   var el = document.getElementById('basketWrap');
+  while (el.firstChild) el.removeChild(el.firstChild);
   if (!basket.length) {
-    el.innerHTML = '<div class="empty-basket">Sepet boş<br><span style="font-size:11px">Sorgulama sayfasından ürün ekleyin</span></div>';
+    var empty = document.createElement('div');
+    empty.className = 'empty-basket';
+    var span = document.createElement('span'); span.style.fontSize = '11px';
+    span.textContent = 'Sorgulama sayfasından ürün ekleyin';
+    empty.innerHTML = 'Sepet boş<br>'; // small safe static markup
+    empty.appendChild(span);
+    el.appendChild(empty);
     if (document.getElementById('offerModal').classList.contains('active')) closeOfferModal();
     updateMobileBasketSummary();
     return;
   }
   var total = 0;
-  var rows = basket.map(function(item, idx) {
+  var table = document.createElement('table'); table.className = 'basket-tbl';
+  var thead = document.createElement('thead'); thead.innerHTML = '<tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr>';
+  table.appendChild(thead);
+  var tbody = document.createElement('tbody');
+  basket.forEach(function(item, idx){
     var sub = item.price != null ? Number(item.price) * item.qty : 0;
     total += sub;
-    return '<tr class="item-row"><td>' + escapeHtml(item.name) + '</td>' +
-      '<td>' + escapeHtml(formatPrice(item.price)) + '</td>' +
-      '<td><span class="basket-qty"><button data-action="changeBasketQty" data-args="' + encodeURIComponent(JSON.stringify([idx, -1])) + '" aria-label="Adedi azalt">−</button>' +
-            '<strong>' + item.qty + '</strong><button data-action="changeBasketQty" data-args="' + encodeURIComponent(JSON.stringify([idx, 1])) + '" aria-label="Adedi artır">+</button></span></td>' +
-      '<td>' + (item.price != null ? formatPrice(sub) : '—') + '</td>' +
-      '<td><button class="del-btn" data-action="removeFromBasket" data-args="' + encodeURIComponent(JSON.stringify([idx])) + '">✕</button></td></tr>';
-  }).join('');
-
-  var iskonto       = total * (iskontoOrani / 100);
-  var iskontoluToplam = total - iskonto;
-  var kdvDahil      = iskontoluToplam * 1.20;
-
-  el.innerHTML = '<table class="basket-tbl">' +
-    '<thead><tr><th>Ürün</th><th>Fiyat</th><th>Adet</th><th>Toplam</th><th></th></tr></thead>' +
-    '<tbody>' + rows + '</tbody>' +
-    '<tfoot>' +
-    (iskontoOrani > 0 ? '<tr class="iskonto"><td colspan="3" style="text-align:right;padding-right:10px">%' + iskontoOrani + ' İskonto</td><td colspan="2">-' + formatPrice(iskonto) + '</td></tr>' +
-    '<tr class="iskonto-sonrasi"><td colspan="3" style="text-align:right;padding-right:10px">İskonto Sonrası Toplam</td><td colspan="2">' + formatPrice(iskontoluToplam) + '</td></tr>' : '') +
-    '<tr class="kdv-dahil"><td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam (%20)</td><td colspan="2">' + formatPrice(kdvDahil) + '</td></tr>' +
-    '</tfoot></table>';
+    var tr = document.createElement('tr'); tr.className = 'item-row';
+    var tdName = document.createElement('td'); tdName.textContent = item.name;
+    var tdPrice = document.createElement('td'); tdPrice.textContent = formatPrice(item.price);
+    var tdQty = document.createElement('td');
+    var spanQty = document.createElement('span'); spanQty.className = 'basket-qty';
+    var btnDec = document.createElement('button'); btnDec.setAttribute('data-action','changeBasketQty'); btnDec.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx, -1]))); btnDec.setAttribute('aria-label','Adedi azalt'); btnDec.textContent = '−';
+    var strong = document.createElement('strong'); strong.textContent = item.qty;
+    var btnInc = document.createElement('button'); btnInc.setAttribute('data-action','changeBasketQty'); btnInc.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx, 1]))); btnInc.setAttribute('aria-label','Adedi artır'); btnInc.textContent = '+';
+    spanQty.appendChild(btnDec); spanQty.appendChild(strong); spanQty.appendChild(btnInc);
+    tdQty.appendChild(spanQty);
+    var tdTotal = document.createElement('td'); tdTotal.textContent = item.price != null ? formatPrice(sub) : '—';
+    var tdDel = document.createElement('td'); var delBtn = document.createElement('button'); delBtn.className = 'del-btn'; delBtn.setAttribute('data-action','removeFromBasket'); delBtn.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx]))); delBtn.textContent = '✕'; tdDel.appendChild(delBtn);
+    tr.appendChild(tdName); tr.appendChild(tdPrice); tr.appendChild(tdQty); tr.appendChild(tdTotal); tr.appendChild(tdDel);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  var tfoot = document.createElement('tfoot');
+  if (iskontoOrani > 0) {
+    var tr1 = document.createElement('tr'); tr1.className = 'iskonto'; tr1.innerHTML = '<td colspan="3" style="text-align:right;padding-right:10px">%' + iskontoOrani + ' İskonto</td><td colspan="2">-' + formatPrice(total * (iskontoOrani/100)) + '</td>';
+    tfoot.appendChild(tr1);
+    var tr2 = document.createElement('tr'); tr2.className = 'iskonto-sonrasi'; tr2.innerHTML = '<td colspan="3" style="text-align:right;padding-right:10px">İskonto Sonrası Toplam</td><td colspan="2">' + formatPrice(total - (total * (iskontoOrani/100))) + '</td>';
+    tfoot.appendChild(tr2);
+  }
+  var trKdv = document.createElement('tr'); trKdv.className = 'kdv-dahil'; trKdv.innerHTML = '<td colspan="3" style="text-align:right;padding-right:10px">KDV Dahil Toplam (%20)</td><td colspan="2">' + formatPrice((total - (total * (iskontoOrani/100))) * 1.20) + '</td>';
+  tfoot.appendChild(trKdv);
+  table.appendChild(tfoot);
+  el.appendChild(table);
   updateMobileBasketSummary();
   if (document.getElementById('offerModal').classList.contains('active')) updateOfferSummary();
 }
@@ -1217,18 +1284,20 @@ function saveCurrentBasket() {
 
 function renderSavedBaskets() {
   var el = document.getElementById('savedBasketList');
+  while (el.firstChild) el.removeChild(el.firstChild);
   if (!savedBaskets.length) {
-    el.innerHTML = '<span class="quick-empty">Kayıtlı sepet bulunmuyor.</span>';
-    return;
+    var empty = document.createElement('span'); empty.className = 'quick-empty'; empty.textContent = 'Kayıtlı sepet bulunmuyor.'; el.appendChild(empty); return;
   }
-  el.innerHTML = savedBaskets.map(function(saved) {
+  savedBaskets.forEach(function(saved){
     var count = saved.items.reduce(function(sum, item){ return sum + Number(item.qty || 0); }, 0);
-    return '<div class="saved-row">' +
-      '<div class="saved-copy"><strong>' + escapeHtml(saved.name) + '</strong><span>' +
-      new Date(saved.date).toLocaleString('tr-TR') + ' · ' + count + ' ürün</span></div>' +
-      '<button class="mini-btn" data-action="restoreSavedBasket" data-args="' + encodeURIComponent(JSON.stringify([saved.id])) + '">Aç</button>' +
-            '<button class="mini-btn danger" data-action="deleteSavedBasket" data-args="' + encodeURIComponent(JSON.stringify([saved.id])) + '">Sil</button></div>';
-  }).join('');
+    var row = document.createElement('div'); row.className = 'saved-row';
+    var copy = document.createElement('div'); copy.className = 'saved-copy';
+    var strong = document.createElement('strong'); strong.textContent = saved.name; copy.appendChild(strong);
+    var span = document.createElement('span'); span.textContent = new Date(saved.date).toLocaleString('tr-TR') + ' · ' + count + ' ürün'; copy.appendChild(span);
+    var btnOpen = document.createElement('button'); btnOpen.className='mini-btn'; btnOpen.setAttribute('data-action','restoreSavedBasket'); btnOpen.setAttribute('data-args', encodeURIComponent(JSON.stringify([saved.id]))); btnOpen.textContent='Aç';
+    var btnDel = document.createElement('button'); btnDel.className='mini-btn danger'; btnDel.setAttribute('data-action','deleteSavedBasket'); btnDel.setAttribute('data-args', encodeURIComponent(JSON.stringify([saved.id]))); btnDel.textContent='Sil';
+    row.appendChild(copy); row.appendChild(btnOpen); row.appendChild(btnDel); el.appendChild(row);
+  });
 }
 
 function restoreSavedBasket(id) {
@@ -1303,9 +1372,13 @@ function ensureOfferNumber() {
 
 function renderCustomerProfiles() {
   var list = document.getElementById('customerProfiles');
-  list.innerHTML = customerProfiles.map(function(profile) {
-    return '<option value="' + escapeHtml(profile.name) + '">İskonto %' + Number(profile.discount || 0) + '</option>';
-  }).join('');
+  while (list.firstChild) list.removeChild(list.firstChild);
+  customerProfiles.forEach(function(profile){
+    var opt = document.createElement('option');
+    opt.value = profile.name;
+    opt.textContent = 'İskonto %' + Number(profile.discount || 0);
+    list.appendChild(opt);
+  });
 }
 
 function saveCustomerProfile() {
