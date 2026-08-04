@@ -1,13 +1,63 @@
-const CACHE_NAME = 'teknikel-v14-24';
+const CACHE_NAME = 'teknikel-v14-25';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css?v=14.24',
-  './app.js?v=14.24',
   './manifest.json',
   './magmaweld-logo.png',
   './icon.png'
 ];
+
+const PRICE_NOTIFICATION_PATCH = `
+
+/* Fiyat değişikliği bildirimi */
+(function () {
+  var originalApplyProductSnapshot = applyProductSnapshot;
+
+  function priceChangeFingerprint(changes) {
+    return changes.map(function (product) {
+      return productKey(product) + '|' + Number(product.previousPrice) + '|' + Number(product.price);
+    }).sort().join('||');
+  }
+
+  function notifyPriceChanges(changes) {
+    if (!changes.length) return;
+
+    var fingerprint = priceChangeFingerprint(changes);
+    var storageKey = 'teknikelLastPriceChangeNotification::' + (signedInEmail || 'signed-out');
+    try {
+      if (localStorage.getItem(storageKey) === fingerprint) return;
+      localStorage.setItem(storageKey, fingerprint);
+    } catch (e) {}
+
+    var message = changes.length === 1
+      ? changes[0].name + ' fiyatı güncellendi: ' + formatPrice(changes[0].previousPrice) + ' → ' + formatPrice(changes[0].price)
+      : changes.length + ' ürünün fiyatı güncellendi. Fiyat güncelleme geçmişini kontrol edin.';
+
+    showToast('🔔 ' + message);
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification('Fiyat güncellemesi', {
+          body: message,
+          icon: 'icon.png',
+          tag: 'teknikel-price-change',
+          renotify: true
+        });
+      } catch (e) {}
+    }
+  }
+
+  applyProductSnapshot = function (snapshot, cached) {
+    originalApplyProductSnapshot(snapshot, cached);
+    if (cached) return;
+    var changedProducts = products.filter(function (product) {
+      return Number(product.priceChange) !== 0 && isFinite(Number(product.priceChange));
+    });
+    notifyPriceChanges(changedProducts);
+  };
+})();
+`;
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
@@ -37,6 +87,23 @@ self.addEventListener('fetch', event => {
         }
         return response;
       }).catch(() => caches.match('./index.html', { ignoreSearch: true }))
+    );
+    return;
+  }
+
+  if (url.pathname.endsWith('/app.js')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).then(response => {
+        if (!response.ok) throw new Error('app.js alınamadı');
+        return response.text();
+      }).then(source => {
+        const patchedResponse = new Response(source + PRICE_NOTIFICATION_PATCH, {
+          headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
+        });
+        const cacheCopy = patchedResponse.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, cacheCopy));
+        return patchedResponse;
+      }).catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
