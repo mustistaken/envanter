@@ -7,7 +7,7 @@
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://docs.google.com">
-<link rel="stylesheet" href="styles.css?v=14.28">
+<link rel="stylesheet" href="styles.css?v=14.29">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -31,6 +31,7 @@
             <div class="utility-menu-panel">
               <button class="utility-action" id="themeBtn" data-action="toggleTheme">Tema: Otomatik</button>
               <button class="utility-action install-btn" id="installBtn">Uygulamayı yükle</button>
+              <button class="utility-action" data-action="clearLocalUserData">Bu cihazdaki kayıtları sil</button>
             </div>
           </details>
         </div>
@@ -295,66 +296,6 @@
   </div>
 </div>
 
-<div class="modal" id="addProductModal" role="dialog" aria-modal="true" aria-labelledby="addProductTitle" aria-hidden="true">
-  <div class="modal-card add-product-modal-card">
-    <div class="modal-head">
-      <div>
-        <span class="section-kicker">ENVANTERE KAYDET</span>
-        <h2 id="addProductTitle">Yeni ürün ekle</h2>
-        <p>Ürün, seçtiğiniz Google Sheets sayfasına doğrudan eklenir.</p>
-      </div>
-      <button class="modal-close" type="button" data-action="closeAddProductModal" aria-label="Kapat">×</button>
-    </div>
-    <form id="addProductForm">
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="newProductCode">ÜRÜN KODU</label>
-          <input type="text" id="newProductCode" name="code" maxlength="80" required autocomplete="off" placeholder="Örn. 123456">
-        </div>
-        <div class="form-field" id="newProductStockField">
-          <label for="newProductStock">STOK ADEDİ</label>
-          <input type="number" id="newProductStock" name="stock" min="0" step="1" required inputmode="numeric" placeholder="0">
-        </div>
-        <div class="form-field full">
-          <label for="newProductName">ÜRÜN ADI</label>
-          <input type="text" id="newProductName" name="name" maxlength="250" required autocomplete="off" placeholder="Ürünün tam adını girin">
-        </div>
-        <div class="form-field">
-          <label for="newProductPrice">FİYAT TUTARI</label>
-          <input type="number" id="newProductPrice" name="price" min="0" step="0.0001" required inputmode="decimal" placeholder="0,0000">
-        </div>
-        <div class="form-field">
-          <label for="newProductCurrency">PARA BİRİMİ</label>
-          <select id="newProductCurrency" name="currency" required>
-            <option value="TRY">TL (₺)</option>
-            <option value="EUR">Euro (€)</option>
-            <option value="USD">Dolar ($)</option>
-          </select>
-        </div>
-      </div>
-      <div class="add-product-destination">
-        <label for="newProductSheet">KAYIT YERİ</label>
-        <select id="newProductSheet" name="sheet" required>
-          <option value="Envanter">Envanter</option>
-          <option value="Trafimet">Trafimet</option>
-          <option value="MW Torç ve Sarfları">MW Torç ve Sarfları</option>
-          <option value="MW Kaynak Makinaları">MW Kaynak Makinaları</option>
-          <option value="Kaynak Tamamlayıcı Ürünler">Kaynak Tamamlayıcı Ürünler</option>
-          <option value="Özlü Teller">Özlü Teller</option>
-          <option value="Örtülü Elektrodlar">Örtülü Elektrodlar</option>
-          <option value="MIG-MAG ve TIG Telleri">MIG-MAG ve TIG Telleri</option>
-        </select>
-      </div>
-      <p class="add-product-sheet-hint" id="newProductSheetHint">Stok bilgisi Envanter sayfasına kaydedilir.</p>
-      <p class="add-product-currency-hint" id="newProductCurrencyHint">TL fiyatı doğrudan kaydedilir.</p>
-      <div class="add-product-actions">
-        <button class="product-cancel-btn" type="button" data-action="closeAddProductModal">Vazgeç</button>
-        <button class="product-save-btn" id="saveProductBtn" type="submit">＋ Ürünü kaydet</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <div class="modal" id="productDetailModal" role="dialog" aria-modal="true" aria-labelledby="productDetailTitle" aria-hidden="true">
   <div class="modal-card detail-modal-card">
     <div class="modal-head">
@@ -387,62 +328,6 @@
   </div>
 </div>
 
-<div class="modal" id="adminModal" role="dialog" aria-modal="true" aria-labelledby="adminTitle" aria-hidden="true">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div>
-        <span class="section-kicker">GÜVENLİ YÖNETİM</span>
-        <h2 id="adminTitle">Yönetim merkezi</h2>
-        <p>Ürün düzenleme yetkisi Google hesabınız üzerinden kontrol edilir.</p>
-      </div>
-      <button class="modal-close" data-action="closeAdminModal" aria-label="Kapat">×</button>
-    </div>
-    <div class="admin-grid">
-      <a class="admin-action primary" href="https://docs.google.com/spreadsheets/d/18hZzuWA2BKES85qMrFylNsDawM81QKWTJF84xJAlM4U/edit" target="_blank" rel="noopener">
-        <strong>Ürün ve stokları düzenle</strong>
-        <span>Yetkili Google Sheets dosyasını açar</span>
-      </a>
-      <button class="admin-action" data-action="exportProductsCsv">
-        <strong>Tüm ürünleri Excel’e aktar</strong>
-        <span>Güncel ürün listesinin yedeğini indirir</span>
-      </button>
-      <button class="admin-action" data-action="refreshData" data-post-action="closeAdminModal">
-        <strong>Verileri şimdi yenile</strong>
-        <span>Google Sheets kayıtlarını tekrar okur</span>
-      </button>
-      <button class="admin-action" data-action="openAccessModal">
-        <strong>＋ Erişim izni ver</strong>
-        <span>E-posta adresiyle yeni bir görüntüleme yetkisi ekler</span>
-      </button>
-    </div>
-    <p class="admin-note">Ürün verileri yalnızca yetkili Google hesabı doğrulandıktan sonra güvenli servis üzerinden alınır. Site kodunda parola veya gizli anahtar bulunmaz.</p>
-  </div>
-</div>
-
-<div class="modal" id="accessModal" role="dialog" aria-modal="true" aria-labelledby="accessTitle" aria-hidden="true">
-  <div class="modal-card access-modal-card">
-    <div class="modal-head">
-      <div>
-        <span class="section-kicker">GÜVENLİ ERİŞİM</span>
-        <h2 id="accessTitle">Erişim izni ver</h2>
-        <p>Eklediğiniz kişi kendi Google hesabıyla envantere giriş yapabilir.</p>
-      </div>
-      <button class="modal-close" type="button" data-action="closeAccessModal" aria-label="Kapat">×</button>
-    </div>
-    <form id="accessForm">
-      <div class="form-field">
-        <label for="accessEmail">GOOGLE HESABI E-POSTASI</label>
-        <input type="email" id="accessEmail" name="email" maxlength="254" required autocomplete="email" placeholder="ornek@gmail.com">
-      </div>
-      <p class="access-note">Bu izin envanteri görüntüleme ve teklif hazırlama içindir. Ürün ekleme ve yetki verme hakkı yalnızca yönetici hesabında kalır.</p>
-      <div class="add-product-actions">
-        <button class="product-cancel-btn" type="button" data-action="closeAccessModal">Vazgeç</button>
-        <button class="product-save-btn" id="saveAccessBtn" type="submit">Erişim izni ver</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <div class="toast" id="toast" role="status"></div>
 
 <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Barkod okuyucu" aria-hidden="true">
@@ -454,7 +339,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=14.28"></script>
+<script src="app.js?v=14.29"></script>
 </body>
 </html>
 
