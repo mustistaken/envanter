@@ -6,31 +6,14 @@
 <title>Teknikel Envanter</title>
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
-<link rel="preconnect" href="https://accounts.google.com">
-<link rel="preconnect" href="https://script.google.com">
-<link rel="stylesheet" href="styles.css?v=14.24">
+<link rel="preconnect" href="https://docs.google.com">
+<link rel="stylesheet" href="styles.css?v=14.28">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
 </head>
-<body class="auth-pending">
-<section class="auth-gate" id="authGate" aria-labelledby="authTitle">
-  <div class="auth-card">
-    <img src="magmaweld-logo.png" alt="Magmaweld" width="360" height="74">
-    <span class="section-kicker">GÜVENLİ ERİŞİM</span>
-    <h1 id="authTitle">Teknikel Akıllı Envanter</h1>
-    <p>Ürün, stok ve fiyat bilgilerini görüntülemek için yetkili Google hesabınızla giriş yapın.</p>
-    <div id="googleSignInButton" class="google-signin"></div>
-    <div class="auth-alternative" aria-hidden="true"><span>veya</span></div>
-    <button class="redirect-signin-btn" type="button" data-action="startRedirectSignIn">
-      <strong>Google ile yönlendirmeli giriş</strong>
-      <small>Giriş penceresi açılmayan tarayıcılar için</small>
-    </button>
-    <p class="auth-status" id="authStatus" role="status">Google giriş sistemi hazırlanıyor…</p>
-  </div>
-</section>
-
-<div class="app" id="appShell" aria-hidden="true">
+<body>
+<div class="app" id="appShell">
   <header class="header">
     <div class="topbar">
       <div class="brand-copy">
@@ -43,21 +26,16 @@
         <div class="header-tools">
           <div class="sync-pill"><span></span> Canlı veri</div>
           <button class="refresh-btn" id="refreshDataBtn" data-action="refreshData">↻ Veriyi yenile</button>
-          <button class="add-product-btn" id="addProductBtn" data-action="openAddProductModal" aria-label="Envantere yeni ürün ekle">＋ Ürün ekle</button>
           <details class="utility-menu">
-            <summary aria-label="Hesap ve ayarlar">•••</summary>
+            <summary aria-label="Ayarlar">•••</summary>
             <div class="utility-menu-panel">
               <button class="utility-action" id="themeBtn" data-action="toggleTheme">Tema: Otomatik</button>
-              <button class="utility-action" id="adminCenterBtn" data-action="openAdminModal">Yönetim merkezi</button>
-              <button class="utility-action account-btn" id="accountBtn" data-action="signOut" title="Google oturumunu kapat">
-                <span id="accountEmail">Google hesabı</span> · Çıkış
-              </button>
               <button class="utility-action install-btn" id="installBtn">Uygulamayı yükle</button>
             </div>
           </details>
         </div>
         <span class="last-sync" id="lastSyncText">Son veri kontrolü bekleniyor</span>
-        <span class="basket-sync-status is-idle" id="basketSyncStatus" role="status" aria-live="polite">☁ Sepet bekleniyor</span>
+        <span class="basket-sync-status is-saved" id="basketSyncStatus" role="status" aria-live="polite">Bu cihazda saklanıyor</span>
       </div>
     </div>
   </header>
@@ -476,7 +454,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=14.24"></script>
+<script src="app.js?v=14.28"></script>
 </body>
 </html>
+
