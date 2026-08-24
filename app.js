@@ -1,15 +1,4 @@
-const GOOGLE_CLIENT_ID = '334267311865-5oqahpjifptf1j67httml63h0gvq0g38.apps.googleusercontent.com';
-const INVENTORY_API_URL = 'https://script.google.com/macros/s/AKfycbxyCdJ0btfjuZgGF5X0Up7ugD2qEMr-jQHVKtPp-MI466roWtnDb0hPweI71iknVOXBvA/exec';
-const AUTH_TOKEN_KEY = 'teknikelGoogleIdToken';
-const AUTO_SIGN_IN_KEY = 'teknikelAutoSignIn';
-const REDIRECT_SIGN_IN_STATE_KEY = 'teknikelRedirectSignInState';
-const REDIRECT_SIGN_IN_NONCE_KEY = 'teknikelRedirectSignInNonce';
-const REDIRECT_SIGN_IN_URI = 'https://mustistaken.github.io/envanter/';
-const ADMIN_EMAIL = 'mustafaozllu@gmail.com';
-let googleIdToken = '';
-let signedInEmail = '';
-let authInitialized = false;
-let redirectAuthError = '';
+const SHEET_ID = '1KmNa1LYogNmb25LRHj_fRJqrwiqOPnrFrGhs7rnhox4';
 
 let products = [], currentProduct = null, iskontoOrani = 0;
 let basket = [];
@@ -37,276 +26,12 @@ const EXCHANGE_RATE_URLS = {
   usd: 'https://api.frankfurter.dev/v2/rate/USD/TRY'
 };
 
-function readSession(key) {
-  try { return sessionStorage.getItem(key) || ''; } catch (e) { return ''; }
-}
-
-function writeSession(key, value) {
-  try {
-    if (value) sessionStorage.setItem(key, value);
-    else sessionStorage.removeItem(key);
-  } catch (e) {}
-}
-
-function readPersistentFlag(key) {
-  try { return localStorage.getItem(key) === '1'; } catch (e) { return false; }
-}
-
-function writePersistentFlag(key, enabled) {
-  try {
-    if (enabled) localStorage.setItem(key, '1');
-    else localStorage.removeItem(key);
-  } catch (e) {}
-}
-
-function decodeGoogleCredential(token) {
-  try {
-    var payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    payload += '='.repeat((4 - payload.length % 4) % 4);
-    return JSON.parse(decodeURIComponent(Array.from(atob(payload)).map(function(char) {
-      return '%' + ('00' + char.charCodeAt(0).toString(16)).slice(-2);
-    }).join('')));
-  } catch (e) {
-    return null;
-  }
-}
-
-function isUsableCredential(token) {
-  var payload = decodeGoogleCredential(token);
-  return !!(payload &&
-    String(payload.aud || '') === GOOGLE_CLIENT_ID &&
-    (payload.email_verified === true || payload.email_verified === 'true') &&
-    Number(payload.exp || 0) * 1000 > Date.now() + 30000);
-}
-
-function randomUrlSafeToken() {
-  if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Güvenli giriş anahtarı üretilemedi.');
-  var bytes = new Uint8Array(24);
-  window.crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode.apply(null, bytes))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function startRedirectSignIn() {
-  try {
-    var state = randomUrlSafeToken();
-    var nonce = randomUrlSafeToken();
-    writeSession(REDIRECT_SIGN_IN_STATE_KEY, state);
-    writeSession(REDIRECT_SIGN_IN_NONCE_KEY, nonce);
-    setAuthStatus('Google giriş sayfasına yönlendiriliyorsunuz…', false);
-    var authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', REDIRECT_SIGN_IN_URI);
-    authUrl.searchParams.set('response_type', 'id_token');
-    authUrl.searchParams.set('response_mode', 'fragment');
-    authUrl.searchParams.set('scope', 'openid email');
-    authUrl.searchParams.set('state', state);
-    authUrl.searchParams.set('nonce', nonce);
-    authUrl.searchParams.set('prompt', 'select_account');
-    window.location.assign(authUrl.toString());
-  } catch (error) {
-    setAuthStatus(String(error && error.message || error), true);
-  }
-}
-
-function consumeRedirectCredential() {
-  var hash = String(window.location.hash || '');
-  if (!hash || (hash.indexOf('id_token=') === -1 && hash.indexOf('error=') === -1)) return false;
-
-  var params = new URLSearchParams(hash.slice(1));
-  var token = params.get('id_token') || '';
-  var state = params.get('state') || '';
-  var expectedState = readSession(REDIRECT_SIGN_IN_STATE_KEY);
-  var expectedNonce = readSession(REDIRECT_SIGN_IN_NONCE_KEY);
-  writeSession(REDIRECT_SIGN_IN_STATE_KEY, '');
-  writeSession(REDIRECT_SIGN_IN_NONCE_KEY, '');
-  history.replaceState(null, document.title, window.location.pathname + window.location.search);
-
-  if (params.get('error')) {
-    redirectAuthError = 'Google yönlendirmeli giriş tamamlanamadı. Lütfen tekrar deneyin.';
-    return false;
-  }
-
-  var payload = decodeGoogleCredential(token);
-  if (!expectedState || !expectedNonce || state !== expectedState ||
-      !payload || String(payload.nonce || '') !== expectedNonce || !isUsableCredential(token)) {
-    redirectAuthError = 'Yönlendirmeli giriş doğrulanamadı. Lütfen tekrar deneyin.';
-    return false;
-  }
-
-  handleGoogleCredential({ credential: token });
-  return true;
-}
-
-function setAuthStatus(message, isError) {
-  var status = document.getElementById('authStatus');
-  status.textContent = message;
-  status.classList.toggle('error', !!isError);
-}
-
-function showAuthGate(message, isError) {
-  // Clear any scheduled expiry checks
-  clearTokenExpiryCheck();
-  googleIdToken = '';
-  signedInEmail = '';
-  resetUserStoresInMemory();
-  writeSession(AUTH_TOKEN_KEY, '');
-  products = [];
-  try {
-    sessionStorage.removeItem('teknikelCachedProducts');
-    sessionStorage.removeItem('teknikelCacheTime');
-  } catch (e) {}
-  document.body.classList.add('auth-pending');
-  var mobileSearchDock = document.getElementById('mobileSearchDock');
-  if (mobileSearchDock) mobileSearchDock.classList.remove('visible');
-  document.getElementById('appShell').setAttribute('aria-hidden', 'true');
-  document.getElementById('authGate').removeAttribute('aria-hidden');
-  setAuthStatus(message || 'Yetkili Google hesabınızla giriş yapın.', isError);
-}
-
-function isAdminAccount() {
-  return String(signedInEmail || '').toLowerCase() === String(ADMIN_EMAIL || '').toLowerCase();
-}
-
-function applyRoleVisibility(email) {
-  signedInEmail = String(email || '').toLowerCase();
-  var isAdmin = isAdminAccount();
-  document.getElementById('addProductBtn').hidden = !isAdmin;
-  document.getElementById('adminCenterBtn').hidden = !isAdmin;
-}
-
-function unlockApp(token) {
-  var payload = decodeGoogleCredential(token);
-  googleIdToken = token;
-  writeSession(AUTH_TOKEN_KEY, token);
-  writePersistentFlag(AUTO_SIGN_IN_KEY, true);
-  document.body.classList.remove('auth-pending');
-  document.getElementById('authGate').setAttribute('aria-hidden', 'true');
-  document.getElementById('appShell').setAttribute('aria-hidden', 'false');
-  document.getElementById('accountEmail').textContent = payload && payload.email ? payload.email : 'Google hesabı';
-  applyRoleVisibility(payload && payload.email ? payload.email : '');
-  loadUserStores();
-  loadData();
-  loadExchangeRates();
-  // Schedule automatic sign-out based on token expiry
-  scheduleTokenExpiryCheck();
-}
-
-// Token expiry handling: schedules a sign-out when the current token expires (with small buffer).
-var _tokenExpiryTimer = null;
-function clearTokenExpiryCheck() {
-  try { if (_tokenExpiryTimer) { clearTimeout(_tokenExpiryTimer); _tokenExpiryTimer = null; } } catch (e) {}
-}
-function scheduleTokenExpiryCheck() {
-  try {
-    clearTokenExpiryCheck();
-    if (!googleIdToken) return;
-    var payload = decodeGoogleCredential(googleIdToken);
-    if (!payload || !payload.exp) return;
-    var expiresAt = Number(payload.exp) * 1000;
-    // Sign out 10 seconds before expiry to avoid races
-    var ms = expiresAt - Date.now() - 10000;
-    if (ms <= 0) {
-      showAuthGate('Oturum süresi doldu. Google oturumunuz yenileniyor…', false);
-      requestAutomaticSignIn();
-      return;
-    }
-    _tokenExpiryTimer = setTimeout(function() {
-      try {
-        showAuthGate('Oturum süresi doldu. Google oturumunuz yenileniyor…', false);
-        requestAutomaticSignIn();
-      } catch (e) { console.error('token expiry handler', e); }
-    }, ms);
-  } catch (e) { console.error('scheduleTokenExpiryCheck', e); }
-}
-// Re-check on page focus/visibility to handle clocks and suspended timers
-window.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') scheduleTokenExpiryCheck(); });
-window.addEventListener('focus', function(){ scheduleTokenExpiryCheck(); });
-
-function handleGoogleCredential(response) {
-  var token = response && response.credential ? response.credential : '';
-  if (!isUsableCredential(token)) {
-    writePersistentFlag(AUTO_SIGN_IN_KEY, false);
-    showAuthGate('Bu Google hesabının envantere erişim izni yok.', true);
-    if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
-    return;
-  }
-  setAuthStatus('Hesabınız doğrulandı. Envanter açılıyor…', false);
-  unlockApp(token);
-}
-
-function requestAutomaticSignIn() {
-  if (!readPersistentFlag(AUTO_SIGN_IN_KEY)) return false;
-  if (!window.google || !google.accounts || !google.accounts.id) return false;
-  setAuthStatus('Google oturumunuz geri yükleniyor…', false);
-  google.accounts.id.prompt(function(notification) {
-    var unavailable = notification &&
-      ((notification.isNotDisplayed && notification.isNotDisplayed()) ||
-       (notification.isSkippedMoment && notification.isSkippedMoment()));
-    if (unavailable) {
-      setAuthStatus('Otomatik giriş kullanılamadı. Google ile giriş düğmesine basın.', false);
-    }
-  });
-  return true;
-}
-
-function renderGoogleSignIn() {
-  if (authInitialized || !window.google || !google.accounts || !google.accounts.id) return false;
-  authInitialized = true;
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleGoogleCredential,
-    auto_select: readPersistentFlag(AUTO_SIGN_IN_KEY),
-    cancel_on_tap_outside: false,
-    itp_support: true,
-    use_fedcm_for_prompt: false,
-    use_fedcm_for_button: false,
-    button_auto_select: false
-  });
-  google.accounts.id.renderButton(document.getElementById('googleSignInButton'), {
-    type: 'standard',
-    theme: 'outline',
-    size: 'large',
-    text: 'signin_with',
-    shape: 'rectangular',
-    width: 300,
-    locale: 'tr'
-  });
-  return true;
-}
-
-function initializeAuth() {
-  var attempts = 0;
-  var timer = setInterval(function() {
-    attempts++;
-    if (renderGoogleSignIn()) {
-      clearInterval(timer);
-      var storedToken = readSession(AUTH_TOKEN_KEY);
-      if (isUsableCredential(storedToken)) {
-        unlockApp(storedToken);
-      } else {
-        showAuthGate(redirectAuthError || 'Yetkili Google hesabınızla giriş yapın.', !!redirectAuthError);
-        redirectAuthError = '';
-        requestAutomaticSignIn();
-      }
-    } else if (attempts >= 80) {
-      clearInterval(timer);
-      showAuthGate('Google giriş sistemi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.', true);
-    }
-  }, 100);
-}
-
 function isLocalDesignPreview() {
   return (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
     new URLSearchParams(location.search).get('design-preview') === '1';
 }
 
 function openLocalDesignPreview() {
-  document.body.classList.remove('auth-pending');
-  document.getElementById('authGate').setAttribute('aria-hidden', 'true');
-  document.getElementById('appShell').setAttribute('aria-hidden', 'false');
-  document.getElementById('accountEmail').textContent = 'Önizleme hesabı';
-  applyRoleVisibility(ADMIN_EMAIL);
   loadUserStores();
   document.getElementById('statProductCount').textContent = '3.334';
   document.getElementById('statCriticalCount').textContent = 'Canlı veride';
@@ -322,15 +47,6 @@ function openLocalDesignPreview() {
   loadExchangeRates();
 }
 
-function signOut() {
-  // Clear scheduled expiry checks and remembered automatic sign-in.
-  clearTokenExpiryCheck();
-  writePersistentFlag(AUTO_SIGN_IN_KEY, false);
-  clearProductSnapshot();
-  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
-  showAuthGate('Oturum kapatıldı. Yeniden giriş yapabilirsiniz.', false);
-}
-
 const USER_STORE_KEYS = new Set([
   'teknikelCurrentBasket',
   'teknikelFavorites',
@@ -342,22 +58,13 @@ const USER_STORE_KEYS = new Set([
 ]);
 
 function persistentStoreKey(key) {
-  if (!USER_STORE_KEYS.has(key)) return key;
-  return key + '::' + (signedInEmail || 'signed-out');
+  return key;
 }
 
 function readStore(key, fallback) {
   try {
     var scopedKey = persistentStoreKey(key);
     var raw = localStorage.getItem(scopedKey);
-    if (!raw && USER_STORE_KEYS.has(key) && isAdminAccount()) {
-      var legacyValue = localStorage.getItem(key);
-      if (legacyValue) {
-        localStorage.setItem(scopedKey, legacyValue);
-        localStorage.removeItem(key);
-        raw = legacyValue;
-      }
-    }
     if (!raw) return fallback;
     var value = JSON.parse(raw);
     return value == null ? fallback : value;
@@ -370,9 +77,6 @@ function writeStore(key, value) {
     if (value == null) localStorage.removeItem(storageKey);
     else localStorage.setItem(storageKey, JSON.stringify(value));
   } catch (e) {}
-  if (key === 'teknikelCurrentBasket' && basketCloudReady && !basketCloudApplying) {
-    scheduleBasketCloudSync();
-  }
 }
 
 function resetUserStoresInMemory() {
@@ -413,7 +117,7 @@ function loadUserStores() {
 function setBasketCloudStatus(message, state) {
   var element = document.getElementById('basketSyncStatus');
   if (!element) return;
-  element.textContent = '☁ ' + message;
+  element.textContent = message;
   element.className = 'basket-sync-status is-' + (state || 'idle');
 }
 
@@ -462,49 +166,11 @@ function mergeBasketCloudState(state) {
 }
 
 function scheduleBasketCloudSync() {
-  if (!basketCloudReady || basketCloudApplying || !signedInEmail || !isUsableCredential(googleIdToken)) return;
-  basketCloudSavePending = true;
-  setBasketCloudStatus('Sepet eşitleniyor…', 'syncing');
-  clearTimeout(basketCloudSyncTimer);
-  basketCloudSyncTimer = setTimeout(saveBasketToCloud, 800);
+  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
 }
 
 async function saveBasketToCloud() {
-  if (!basketCloudReady || basketCloudApplying || !isUsableCredential(googleIdToken)) return;
-  if (basketCloudSaving) {
-    basketCloudSavePending = true;
-    return;
-  }
-  basketCloudSaving = true;
-  basketCloudSavePending = false;
-  setBasketCloudStatus('Sepet kaydediliyor…', 'syncing');
-  var stateToSave = {
-    items: sanitizeCloudBasketItems(basket),
-    discount: Math.max(0, Math.min(100, Number(iskontoOrani) || 0))
-  };
-  try {
-    var response = await fetch(INVENTORY_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({
-        idToken: googleIdToken,
-        action: 'saveBasketState',
-        basketState: stateToSave
-      }),
-      cache: 'no-store',
-      redirect: 'follow'
-    });
-    if (!response.ok) throw new Error('Sepet eşitleme servisi yanıt vermedi.');
-    var payload = await response.json();
-    if (!payload || !payload.ok) throw new Error(payload && payload.error ? payload.error : 'Sepet eşitlenemedi.');
-    setBasketCloudStatus('Sepet kaydedildi ✓', 'saved');
-  } catch (error) {
-    setBasketCloudStatus('Sepet kaydedilemedi', 'error');
-    console.warn('Sepet buluta kaydedilemedi:', error);
-  } finally {
-    basketCloudSaving = false;
-    if (basketCloudSavePending) scheduleBasketCloudSync();
-  }
+  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
 }
 
 function formatExchangeRate(value) {
@@ -825,20 +491,36 @@ function mapSecureSheet(cfg, rows) {
     });
 }
 
-async function fetchSecureInventory() {
-  if (!isUsableCredential(googleIdToken)) throw new Error('Oturum süresi doldu.');
-  const response = await fetch(INVENTORY_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify({ idToken: googleIdToken }),
-    cache: 'no-store',
-    redirect: 'follow'
-  });
-  if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
-  const payload = await response.json();
-  if (!payload || !payload.ok || !payload.sheets) throw new Error(payload && payload.error ? payload.error : 'Yetkilendirme başarısız.');
-  mergeBasketCloudState(payload.basketState);
-  return SHEETS.map(function(cfg){ return mapSecureSheet(cfg, payload.sheets[cfg.name]); });
+async function fetchSheet(cfg) {
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const text = await response.text();
+    const match = text.match(/setResponse\(([\s\S]*?)\);/);
+    if (!match) throw new Error('Geçersiz Google Sheets yanıtı');
+    const data = JSON.parse(match[1]);
+    return (data.table.rows || [])
+      .filter(function(row) { return row.c && row.c[cfg.n] && row.c[cfg.n].v; })
+      .map(function(row) {
+        var cells = row.c;
+        var barcodeValue = cells[cfg.b] ? cells[cfg.b].v : '';
+        var barcodeNumber = Number(barcodeValue);
+        return {
+          barcode: barcodeValue === null || barcodeValue === undefined ? '' :
+            ((!isNaN(barcodeNumber) && isFinite(barcodeNumber)) ? String(Math.round(barcodeNumber)) : String(barcodeValue).trim()),
+          name: String(cells[cfg.n].v || ''),
+          price: cells[cfg.p] ? cells[cfg.p].v : null,
+          updated: cfg.u !== null && cells[cfg.u] ? cells[cfg.u].v : null,
+          stock: cfg.s !== null && cells[cfg.s] ? Number(cells[cfg.s].v) : null,
+          sheet: cfg.name
+        };
+      });
+  } catch (error) {
+    console.warn(cfg.name + ' yüklenemedi:', error);
+    return null;
+  }
 }
 
 function setLastSync(value, cached) {
@@ -862,7 +544,7 @@ function updateOverviewStats() {
 const PRODUCT_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function productSnapshotKey() {
-  return 'teknikelProductSnapshot::' + (signedInEmail || 'signed-out');
+  return 'teknikelProductSnapshot';
 }
 
 function readProductSnapshot() {
@@ -923,7 +605,7 @@ async function loadData(manual) {
   if (cachedSnapshot) applyProductSnapshot(cachedSnapshot, true);
 
   try {
-    const results = await fetchSecureInventory();
+    const results = await Promise.all(SHEETS.map(fetchSheet));
     const failedCount = results.filter(function(result){ return result === null; }).length;
     const freshProducts = results.filter(Array.isArray).flat();
     if (!freshProducts.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
@@ -951,10 +633,7 @@ async function loadData(manual) {
       updateOverviewStats();
       document.getElementById('infoBox').textContent = 'Ürün verisi alınamadı: ' + e.message;
       setLastSync('', false);
-      showToast('Güvenli ürün verisi alınamadı.');
-    }
-    if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(e.message || ''))) {
-      showAuthGate(e.message + ' Lütfen yeniden giriş yapın.', true);
+      showToast('Ürün verisi alınamadı.');
     }
   } finally {
     isLoadingData = false;
@@ -2146,9 +1825,8 @@ function updateMobileSearchDock() {
   var mainInput = document.getElementById('searchInput');
   var queryTab = document.getElementById('tab-sorgu');
   var mobile = window.matchMedia && window.matchMedia('(max-width: 560px)').matches;
-  var appReady = !document.body.classList.contains('auth-pending');
   var queryVisible = queryTab && queryTab.style.display !== 'none';
-  var show = mobile && appReady && queryVisible && mainInput.getBoundingClientRect().bottom < 0;
+  var show = mobile && queryVisible && mainInput.getBoundingClientRect().bottom < 0;
   dock.classList.toggle('visible', !!show);
 }
 
@@ -2320,7 +1998,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.24').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.28').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -2332,4 +2010,10 @@ renderOfferHistory();
 renderQuickLists();
 renderCustomerProfiles();
 if (isLocalDesignPreview()) openLocalDesignPreview();
-else if (!consumeRedirectCredential()) initializeAuth();
+else {
+  loadUserStores();
+  loadData();
+  loadExchangeRates();
+  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
+}
+
