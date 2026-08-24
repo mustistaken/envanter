@@ -1,25 +1,20 @@
 Security notes for Teknikel Akıllı Envanter
 
-Current protections
-- Google ID tokens are verified by the Apps Script API using Google's tokeninfo endpoint.
-- The API checks aud, exp and email_verified before returning inventory data.
-- Inventory access is enforced server-side with an allowlist; grantAccess and addProduct also require the administrator account.
-- The browser keeps the short-lived Google ID token in sessionStorage, not localStorage. A non-sensitive preference flag enables Google Identity Services to restore the signed-in account automatically after reopening; explicit sign-out removes both.
-- A full-page OpenID Connect fallback is available for embedded browsers that cannot complete the Google Identity Services popup/FedCM flow. It uses cryptographically random state and nonce values stored only in sessionStorage, validates both on return, removes the URL fragment immediately, and sends the resulting ID token through the same server-side verification and allowlist checks.
-- User-specific favorites and offer data are namespaced by signed-in email. The current basket and discount are also synchronized through the authenticated Apps Script API, stored per authorized email in a hidden spreadsheet tab, and validated/capped server-side.
-- A user-scoped product snapshot (maximum age 12 hours) is stored locally only after successful authentication so the interface opens immediately while fresh data synchronizes in the background; explicit sign-out removes it.
-- Inline HTML event handlers and dynamic executable code are not used.
-- Spreadsheet-bound text entered through addProduct is escaped when it begins with a formula marker.
-- The service worker caches only the static app shell; authenticated API responses are not cached.
+Current data model
+- The site does not use Google Sign-In and does not store authentication tokens.
+- Inventory data is read from the separate, read-only "Teknikel Envanter - Web Yayını" spreadsheet.
+- The publication spreadsheet contains only the eight inventory/product tabs used by the site.
+- The private source spreadsheet remains restricted. _Kullanıcı Sepetleri and Fiyat Güncelleme Geçmişi are not present in the public workbook.
+- The public workbook uses IMPORTRANGE to receive current product data from the private source workbook.
+- Basket, favorites, customer profiles and offer history are stored only in the current browser's localStorage.
+- Product data is intentionally public to anyone who knows the website or publication-sheet URL.
+- The service worker caches only the static app shell. Google Sheets responses are not cached by the service worker.
 
 Publishing checklist
-- [x] Server verifies Google token aud/exp/email_verified.
-- [x] Server enforces inventory allowlist and administrator-only mutations.
-- [x] Token storage is limited to the browser session.
-- [x] Redirect sign-in validates state, nonce, audience, expiry and verified email before unlocking the app.
-- [x] Inline onclick handlers were replaced with addEventListener.
-- [x] User-entered product text is protected from spreadsheet formula injection.
-- [x] Cross-browser basket synchronization requires a verified, allowlisted Google account and stores only sanitized basket fields.
+- [x] Google Sign-In, redirect authentication and token persistence removed.
+- [x] Private user-basket and price-history tabs excluded from the public workbook.
+- [x] Public workbook is read-only for link visitors.
+- [x] Static app-shell cache version is updated with every release.
 - [x] Run scripts\security-check.ps1 before publishing.
-- [ ] Consider moving authentication to an httpOnly, Secure server session if the site later moves away from static GitHub Pages hosting.
-- [ ] Add a tested Content-Security-Policy when the Google Identity, Apps Script, exchange-rate, barcode and print dependencies have been fully enumerated.
+- [ ] Add a tested Content-Security-Policy after all external dependencies are enumerated.
+
