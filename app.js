@@ -14,13 +14,8 @@ let currentOfferNumber = '';
 let isLoadingData = false;
 let barcodeLibraryPromise = null;
 let lastModalTrigger = null;
-let basketCloudSyncTimer = null;
-let basketCloudReady = false;
-let basketCloudApplying = false;
-let basketCloudSaving = false;
-let basketCloudSavePending = false;
-
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
+const NETWORK_TIMEOUT_MS = 12000;
 const EXCHANGE_RATE_URLS = {
   eur: 'https://api.frankfurter.dev/v2/rate/EUR/TRY',
   usd: 'https://api.frankfurter.dev/v2/rate/USD/TRY'
@@ -80,12 +75,6 @@ function writeStore(key, value) {
 }
 
 function resetUserStoresInMemory() {
-  clearTimeout(basketCloudSyncTimer);
-  basketCloudReady = false;
-  basketCloudApplying = false;
-  basketCloudSaving = false;
-  basketCloudSavePending = false;
-  setBasketCloudStatus('Sepet bekleniyor', 'idle');
   basket = [];
   favorites = [];
   recentProducts = [];
@@ -96,6 +85,17 @@ function resetUserStoresInMemory() {
   currentProduct = null;
   iskontoOrani = 0;
   currentOfferNumber = '';
+}
+
+function clearLocalUserData() {
+  if (!window.confirm('Bu cihazdaki sepetler, favoriler, müşteri kayıtları ve teklif geçmişi kalıcı olarak silinsin mi?')) return;
+  USER_STORE_KEYS.forEach(function(key) {
+    try { localStorage.removeItem(persistentStoreKey(key)); } catch (e) {}
+  });
+  resetUserStoresInMemory();
+  loadUserStores();
+  setBasketCloudStatus('Bu cihazdaki kayıtlar silindi', 'saved');
+  showToast('Bu cihazdaki kişisel kayıtlar silindi.');
 }
 
 function loadUserStores() {
@@ -121,56 +121,18 @@ function setBasketCloudStatus(message, state) {
   element.className = 'basket-sync-status is-' + (state || 'idle');
 }
 
-function sanitizeCloudBasketItems(items) {
-  if (!Array.isArray(items)) return [];
-  return items.slice(0, 500).map(function(item) {
-    if (!item || !String(item.name || '').trim()) return null;
-    var price = item.price === null || item.price === '' ? null : Number(item.price);
-    var stock = item.stock === null || item.stock === '' ? null : Number(item.stock);
-    return {
-      barcode: String(item.barcode || '').slice(0, 80),
-      name: String(item.name || '').trim().slice(0, 250),
-      price: isFinite(price) && price >= 0 ? price : null,
-      updated: item.updated ? String(item.updated).slice(0, 100) : null,
-      stock: isFinite(stock) ? stock : null,
-      sheet: String(item.sheet || '').slice(0, 100),
-      qty: Math.max(1, Math.min(9999, Math.round(Number(item.qty) || 1)))
-    };
-  }).filter(Boolean);
+function markLocalDataSaved() {
+  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
 }
 
-function applyCloudBasketState(state) {
-  basketCloudApplying = true;
+async function fetchWithTimeout(url, options) {
+  var controller = new AbortController();
+  var timeout = setTimeout(function() { controller.abort(); }, NETWORK_TIMEOUT_MS);
   try {
-    basket = sanitizeCloudBasketItems(state && state.items);
-    writeStore('teknikelCurrentBasket', basket);
-    applyDiscountValue(state && state.discount);
-    currentOfferNumber = '';
-    renderBasket();
-    updateBadge();
+    return await fetch(url, Object.assign({}, options || {}, { signal: controller.signal }));
   } finally {
-    basketCloudApplying = false;
-    basketCloudReady = true;
-    setBasketCloudStatus('Sepet eşitlendi', 'saved');
+    clearTimeout(timeout);
   }
-}
-
-function mergeBasketCloudState(state) {
-  if (state && Array.isArray(state.items)) {
-    applyCloudBasketState(state);
-    return;
-  }
-  basketCloudReady = true;
-  if (basket.length) scheduleBasketCloudSync();
-  else setBasketCloudStatus('Sepet hazır', 'saved');
-}
-
-function scheduleBasketCloudSync() {
-  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
-}
-
-async function saveBasketToCloud() {
-  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
 }
 
 function formatExchangeRate(value) {
@@ -196,8 +158,8 @@ async function loadExchangeRates() {
   if (cachedRates) renderExchangeRates(cachedRates, true);
   try {
     var responses = await Promise.all([
-      fetch(EXCHANGE_RATE_URLS.eur, { cache: 'no-store' }),
-      fetch(EXCHANGE_RATE_URLS.usd, { cache: 'no-store' })
+      fetchWithTimeout(EXCHANGE_RATE_URLS.eur, { cache: 'no-store' }),
+      fetchWithTimeout(EXCHANGE_RATE_URLS.usd, { cache: 'no-store' })
     ]);
     if (!responses[0].ok || !responses[1].ok) throw new Error('Kur servisi yanıt vermedi');
     var values = await Promise.all(responses.map(function(response){ return response.json(); }));
@@ -384,7 +346,7 @@ function setIskonto(val, btn) {
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   renderBasket();
-  scheduleBasketCloudSync();
+  markLocalDataSaved();
 }
 
 function setIskontoCustom(val) {
@@ -396,7 +358,7 @@ function setIskontoCustom(val) {
   iskontoOrani = n;
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   renderBasket();
-  scheduleBasketCloudSync();
+  markLocalDataSaved();
 }
 
 function applyDiscountValue(value) {
@@ -410,7 +372,7 @@ function applyDiscountValue(value) {
   });
   document.getElementById('iskontoCustom').value = matched ? '' : discount;
   renderBasket();
-  scheduleBasketCloudSync();
+  markLocalDataSaved();
 }
 
 const SHEETS = [
@@ -495,7 +457,7 @@ async function fetchSheet(cfg) {
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
   try {
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await fetchWithTimeout(url, { cache: 'no-store' });
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const text = await response.text();
     const match = text.match(/setResponse\(([\s\S]*?)\);/);
@@ -644,143 +606,6 @@ async function loadData(manual) {
 
 function refreshData() {
   loadData(true);
-}
-
-function openAddProductModal() {
-  if (!isAdminAccount() && !isLocalDesignPreview()) {
-    showToast('Ürün ekleme yalnızca yönetici hesabına açıktır.');
-    return;
-  }
-  if (!isUsableCredential(googleIdToken) && !isLocalDesignPreview()) {
-    showToast('Ürün eklemek için Google hesabınızla yeniden giriş yapın.');
-    return;
-  }
-  document.getElementById('addProductForm').reset();
-  updateAddProductSheetFields();
-  openModal('addProductModal');
-  requestAnimationFrame(function() {
-    document.getElementById('newProductCode').focus();
-  });
-}
-
-function closeAddProductModal() {
-  closeModal('addProductModal');
-}
-
-function updateAddProductSheetFields() {
-  var sheetName = document.getElementById('newProductSheet').value;
-  var stockInput = document.getElementById('newProductStock');
-  var stockField = document.getElementById('newProductStockField');
-  var hint = document.getElementById('newProductSheetHint');
-  var currencySelect = document.getElementById('newProductCurrency');
-  var supportsStock = sheetName === 'Envanter';
-  var defaultCurrencies = {
-    'Envanter': 'TRY',
-    'Trafimet': 'EUR',
-    'MW Torç ve Sarfları': 'USD',
-    'MW Kaynak Makinaları': 'USD',
-    'Kaynak Tamamlayıcı Ürünler': 'USD',
-    'Özlü Teller': 'USD',
-    'Örtülü Elektrodlar': 'TRY',
-    'MIG-MAG ve TIG Telleri': 'TRY'
-  };
-
-  stockInput.disabled = !supportsStock;
-  stockInput.required = supportsStock;
-  stockField.classList.toggle('is-disabled', !supportsStock);
-  currencySelect.value = defaultCurrencies[sheetName] || 'TRY';
-  hint.textContent = supportsStock
-    ? 'Stok bilgisi Envanter sayfasına kaydedilir.'
-    : 'Bu sayfada stok sütunu yoktur; ürün kodu, adı ve TL fiyatı kaydedilir.';
-  updateAddProductCurrencyHint();
-}
-
-function updateAddProductCurrencyHint() {
-  var currency = document.getElementById('newProductCurrency').value;
-  var hint = document.getElementById('newProductCurrencyHint');
-  if (currency === 'EUR') {
-    hint.textContent = 'Euro tutarı kaydedilir; sitedeki TL fiyatı güncel EUR/TRY kuruyla otomatik hesaplanır.';
-  } else if (currency === 'USD') {
-    hint.textContent = 'Dolar tutarı kaydedilir; sitedeki TL fiyatı güncel USD/TRY kuruyla otomatik hesaplanır.';
-  } else {
-    hint.textContent = 'TL fiyatı doğrudan kaydedilir.';
-  }
-}
-
-async function submitAddProduct(event) {
-  event.preventDefault();
-  if (!isAdminAccount()) {
-    closeAddProductModal();
-    showToast('Ürün ekleme yalnızca yönetici hesabına açıktır.');
-    return;
-  }
-  if (!isUsableCredential(googleIdToken)) {
-    closeAddProductModal();
-    showAuthGate('Oturum süresi doldu. Lütfen yeniden giriş yapın.', true);
-    return;
-  }
-
-  var form = document.getElementById('addProductForm');
-  if (!form.reportValidity()) return;
-
-  var saveBtn = document.getElementById('saveProductBtn');
-  var sheetName = document.getElementById('newProductSheet').value;
-  var stockInput = document.getElementById('newProductStock');
-  var currency = document.getElementById('newProductCurrency').value;
-  var product = {
-    code: document.getElementById('newProductCode').value.trim(),
-    name: document.getElementById('newProductName').value.trim(),
-    price: Number(document.getElementById('newProductPrice').value),
-    stock: stockInput.disabled ? null : Number(stockInput.value),
-    sheet: sheetName,
-    currency: currency
-  };
-
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Kaydediliyor…';
-  try {
-    var response = await fetch(INVENTORY_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({
-        action: 'addProduct',
-        idToken: googleIdToken,
-        product: product
-      }),
-      cache: 'no-store',
-      redirect: 'follow'
-    });
-    if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
-    var payload = await response.json();
-    if (!payload || !payload.ok || payload.action !== 'addProduct') {
-      throw new Error(payload && payload.error ? payload.error : 'Ürün kaydedilemedi.');
-    }
-
-    closeAddProductModal();
-    form.reset();
-    await loadData(false);
-    var added = products.find(function(item) {
-      return item.sheet === sheetName && String(item.barcode) === String(product.code);
-    });
-    if (added) {
-      document.getElementById('searchInput').value = added.name;
-      document.getElementById('mobileSearchInput').value = added.name;
-      showResult(added);
-      addRecentProduct(added);
-      showToast('Ürün ' + sheetName + ' sayfasına ' + currency + ' fiyatıyla eklendi ve liste yenilendi.');
-    } else {
-      showToast('Ürün ' + sheetName + ' sayfasına ' + currency + ' fiyatıyla eklendi. Listeyi yeniden yenileyin.');
-    }
-  } catch (error) {
-    showToast(String(error && error.message || error));
-    if (/oturum|erişim izni|doğrulama|yetkilendirme/i.test(String(error && error.message || ''))) {
-      closeAddProductModal();
-      showAuthGate(String(error.message) + ' Lütfen yeniden giriş yapın.', true);
-    }
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = '＋ Ürünü kaydet';
-  }
 }
 
 function populateCategories() {
@@ -1673,84 +1498,6 @@ function printOffer() {
   }
 }
 
-function openAdminModal() {
-  if (!isAdminAccount()) {
-    showToast('Yönetim merkezi yalnızca yönetici hesabına açıktır.');
-    return;
-  }
-  openModal('adminModal');
-}
-
-function closeAdminModal() {
-  closeModal('adminModal');
-}
-
-function openAccessModal() {
-  if (!isAdminAccount()) {
-    showToast('Erişim izni yalnızca yönetici hesabı verebilir.');
-    return;
-  }
-  closeAdminModal();
-  document.getElementById('accessForm').reset();
-  openModal('accessModal');
-  requestAnimationFrame(function() {
-    document.getElementById('accessEmail').focus();
-  });
-}
-
-function closeAccessModal() {
-  closeModal('accessModal');
-}
-
-async function submitAccessGrant(event) {
-  event.preventDefault();
-  if (!isAdminAccount() || !isUsableCredential(googleIdToken)) {
-    closeAccessModal();
-    showAuthGate('Yönetici oturumu gerekli. Lütfen yeniden giriş yapın.', true);
-    return;
-  }
-
-  var form = document.getElementById('accessForm');
-  if (!form.reportValidity()) return;
-  var email = document.getElementById('accessEmail').value.trim().toLowerCase();
-  var saveBtn = document.getElementById('saveAccessBtn');
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'İzin veriliyor…';
-
-  try {
-    var response = await fetch(INVENTORY_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({
-        action: 'grantAccess',
-        idToken: googleIdToken,
-        email: email
-      }),
-      cache: 'no-store',
-      redirect: 'follow'
-    });
-    if (!response.ok) throw new Error('Güvenli veri servisi yanıt vermedi.');
-    var payload = await response.json();
-    if (!payload || !payload.ok || payload.action !== 'grantAccess') {
-      throw new Error(payload && payload.error ? payload.error : 'Erişim izni verilemedi.');
-    }
-
-    form.reset();
-    closeAccessModal();
-    showToast(payload.access && payload.access.alreadyAllowed
-      ? email + ' zaten erişim listesinde.'
-      : email + ' için erişim izni verildi.');
-  } catch (error) {
-    showToast(String(error && error.message || error));
-    if (/oturum|yönetici|doğrulama|yetkilendirme/i.test(String(error && error.message || ''))) {
-      closeAccessModal();
-    }
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Erişim izni ver';
-  }
-}
-
 var systemThemeQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
 function normalizeTheme(theme) {
@@ -1842,25 +1589,12 @@ window.addEventListener('resize', updateMobileSearchDock);
   document.getElementById(id).addEventListener('input', updateOfferSummary);
 });
 document.getElementById('iskontoCustom').addEventListener('input', function(e){ setIskontoCustom(e.target.value); });
-document.getElementById('addProductForm').addEventListener('submit', submitAddProduct);
-document.getElementById('newProductCurrency').addEventListener('change', updateAddProductCurrencyHint);
-document.getElementById('newProductSheet').addEventListener('change', updateAddProductSheetFields);
-document.getElementById('accessForm').addEventListener('submit', submitAccessGrant);
 document.getElementById('customerName').addEventListener('change', applyCustomerProfile);
 document.getElementById('offerModal').addEventListener('click', function(e) {
   if (e.target === this) closeOfferModal();
 });
 document.getElementById('productDetailModal').addEventListener('click', function(e) {
   if (e.target === this) closeProductDetail();
-});
-document.getElementById('adminModal').addEventListener('click', function(e) {
-  if (e.target === this) closeAdminModal();
-});
-document.getElementById('addProductModal').addEventListener('click', function(e) {
-  if (e.target === this) closeAddProductModal();
-});
-document.getElementById('accessModal').addEventListener('click', function(e) {
-  if (e.target === this) closeAccessModal();
 });
 document.addEventListener('keydown', function(e) {
   var activeModal = document.querySelector('.modal.active');
@@ -1998,7 +1732,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.28').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.29').catch(function(){}); });
 }
 
 updateConnectionState();
