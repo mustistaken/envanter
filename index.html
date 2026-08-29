@@ -7,7 +7,7 @@
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://docs.google.com">
-<link rel="stylesheet" href="styles.css?v=14.30">
+<link rel="stylesheet" href="styles.css?v=14.31">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -95,7 +95,10 @@
         <label class="field-label" for="searchInput">ARAMA</label>
         <div class="input-row">
           <input type="text" id="searchInput" placeholder="Ürün adı veya barkod girin..." autocomplete="off" />
-          <button class="scan-btn" id="scanBtn" aria-label="Kamerayla barkod okut">▣</button>
+          <button class="scan-btn" id="scanBtn" aria-label="Kamerayla barkod okut">
+            <span class="scan-icon" aria-hidden="true">▣</span>
+            <span class="scan-label">Barkod tara</span>
+          </button>
         </div>
         <div class="filter-row">
           <select class="category-select" id="categoryFilter" aria-label="Ürün kategorisi">
@@ -136,7 +139,7 @@
         </div>
       </section>
 
-      <section class="card quick-card" aria-label="Hızlı erişim">
+      <section class="card quick-card" id="quickAccessCard" aria-label="Hızlı erişim">
         <div class="quick-head">
           <strong>Hızlı erişim</strong>
           <span>Favoriler ve son baktıklarınız</span>
@@ -339,7 +342,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=14.30"></script>
+<script src="app.js?v=14.31"></script>
 </body>
 </html>
 
