@@ -28,6 +28,7 @@ function isLocalDesignPreview() {
 
 function openLocalDesignPreview() {
   loadUserStores();
+  removeRetiredDemoData();
   document.getElementById('statProductCount').textContent = '3.334';
   document.getElementById('statCriticalCount').textContent = 'Canlı veride';
   document.getElementById('statLastSync').textContent = 'Şimdi';
@@ -38,7 +39,7 @@ function openLocalDesignPreview() {
   var notice = document.createElement('span'); notice.className = 'quick-empty'; notice.textContent = 'Gerçek stok bilgileri yalnızca güvenli canlı sitede gösterilir.';
   cs.appendChild(notice);
   document.getElementById('infoBox').textContent =
-    'Tasarım önizlemesi · Google Sheets ve Apps Script bağlantısı canlı sitede aynen korunur.';
+    'Tasarım önizlemesi · Açık Google Sheets veri bağlantısı canlı sitede kullanılır.';
   loadExchangeRates();
 }
 
@@ -89,9 +90,16 @@ function resetUserStoresInMemory() {
 
 function clearLocalUserData() {
   if (!window.confirm('Bu cihazdaki sepetler, favoriler, müşteri kayıtları ve teklif geçmişi kalıcı olarak silinsin mi?')) return;
-  USER_STORE_KEYS.forEach(function(key) {
-    try { localStorage.removeItem(persistentStoreKey(key)); } catch (e) {}
-  });
+  try {
+    for (var i = localStorage.length - 1; i >= 0; i--) {
+      var storedKey = localStorage.key(i);
+      var isCurrentUserStore = USER_STORE_KEYS.has(storedKey);
+      var isLegacyUserStore = Array.from(USER_STORE_KEYS).some(function(key) {
+        return storedKey && storedKey.indexOf(key + '::') === 0;
+      });
+      if (isCurrentUserStore || isLegacyUserStore) localStorage.removeItem(storedKey);
+    }
+  } catch (e) {}
   resetUserStoresInMemory();
   loadUserStores();
   setBasketCloudStatus('Bu cihazdaki kayıtlar silindi', 'saved');
@@ -432,27 +440,6 @@ function removeRetiredDemoData() {
   writeStore('teknikelFavoriteGroups', favoriteGroups);
 }
 
-removeRetiredDemoData();
-
-function mapSecureSheet(cfg, rows) {
-  if (!Array.isArray(rows)) return null;
-  return rows.slice(2)
-    .filter(function(row){ return row && row[cfg.n] !== undefined && String(row[cfg.n]).trim(); })
-    .map(function(row) {
-      var barcodeValue = row[cfg.b];
-      var barcodeNumber = Number(barcodeValue);
-      return {
-        barcode: barcodeValue === null || barcodeValue === undefined ? '' :
-          ((!isNaN(barcodeNumber) && isFinite(barcodeNumber)) ? String(Math.round(barcodeNumber)) : String(barcodeValue).trim()),
-        name: String(row[cfg.n] || ''),
-        price: row[cfg.p] === undefined || row[cfg.p] === '' ? null : row[cfg.p],
-        updated: cfg.u !== null && row[cfg.u] !== undefined ? row[cfg.u] : null,
-        stock: cfg.s !== null && row[cfg.s] !== undefined && row[cfg.s] !== '' ? Number(row[cfg.s]) : null,
-        sheet: cfg.name
-      };
-    });
-}
-
 async function fetchSheet(cfg) {
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
@@ -531,10 +518,6 @@ function writeProductSnapshot(snapshot) {
   } catch (e) {
     // Quota or private-mode failures should never block live synchronization.
   }
-}
-
-function clearProductSnapshot() {
-  try { localStorage.removeItem(productSnapshotKey()); } catch (e) {}
 }
 
 function applyProductSnapshot(snapshot, cached) {
@@ -1255,19 +1238,6 @@ function downloadCsv(filename, rows) {
   setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, 1000);
 }
 
-function exportProductsCsv() {
-  if (!products.length) { showToast('Aktarılacak ürün bulunamadı.'); return; }
-  var rows = [['Barkod', 'Ürün', 'Kategori', 'Marka', 'Fiyat', 'Stok', 'Son güncelleme']];
-  products.forEach(function(product) {
-    rows.push([
-      product.barcode, product.name, product.sheet, getBrand(product), product.price,
-      product.stock == null ? '' : product.stock, formatDate(product.updated)
-    ]);
-  });
-  downloadCsv('teknikel-urunler-' + new Date().toISOString().slice(0, 10) + '.csv', rows);
-  showToast('Ürün listesi Excel uyumlu olarak indirildi.');
-}
-
 function exportBasketCsv() {
   if (!basket.length) { showToast('Aktarmak için sepete ürün ekleyin.'); return; }
   var totals = getBasketTotals();
@@ -1732,7 +1702,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.29').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.30').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -1746,6 +1716,7 @@ renderCustomerProfiles();
 if (isLocalDesignPreview()) openLocalDesignPreview();
 else {
   loadUserStores();
+  removeRetiredDemoData();
   loadData();
   loadExchangeRates();
   setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
