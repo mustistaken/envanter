@@ -663,7 +663,7 @@ function renderCriticalStocks() {
   var critical = products.filter(function(product) {
     return product.stock !== null && product.stock !== undefined && Number(product.stock) <= 5;
   }).sort(function(a, b){ return Number(a.stock) - Number(b.stock); });
-  if (card) card.classList.toggle('is-empty', critical.length === 0);
+  if (card) card.hidden = critical.length === 0;
   document.getElementById('criticalStockCount').textContent = critical.length ? critical.length + ' kritik ürün' : 'Kritik stok yok';
   var statEl = document.getElementById('statCriticalCount');
   if (statEl) statEl.textContent = critical.length ? critical.length + ' ürün' : 'Yok';
@@ -771,7 +771,15 @@ function showResult(found) {
     favoriteBtn.classList.toggle('active', isFavorite);
     favoriteBtn.textContent = isFavorite ? '★' : '☆';
     document.querySelector('.result-panel').classList.remove('pulse-result');
-    requestAnimationFrame(function(){ document.querySelector('.result-panel').classList.add('pulse-result'); });
+    requestAnimationFrame(function(){
+      var panel = document.querySelector('.result-panel');
+      panel.classList.add('pulse-result');
+      var bounds = panel.getBoundingClientRect();
+      if (bounds.top < 0 || bounds.bottom > window.innerHeight) {
+        var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        panel.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+      }
+    });
   } else {
     nameEl.textContent   = 'Bulunamadı';
     priceEl.textContent  = '—';
@@ -885,6 +893,7 @@ function openProductByEncodedKey(encodedKey) {
 
 function renderQuickLists() {
   var el = document.getElementById('quickLists');
+  var card = document.getElementById('quickAccessCard');
   while (el.firstChild) el.removeChild(el.firstChild);
   var grouped = {};
   favorites.forEach(function(key) {
@@ -921,9 +930,10 @@ function renderQuickLists() {
     el.appendChild(btn);
   });
   if (!any) {
-    var empty = document.createElement('span'); empty.className = 'quick-empty'; empty.textContent = 'Henüz favori veya son arama yok.';
-    el.appendChild(empty);
+    if (card) card.hidden = true;
+    return;
   }
+  if (card) card.hidden = false;
 }
 
 function search(q) {
@@ -1508,8 +1518,8 @@ function updateBadge() {
 }
 
 function showTab(tab) {
-  document.getElementById('tab-sorgu').style.display = tab === 'sorgu' ? 'block' : 'none';
-  document.getElementById('tab-sepet').style.display = tab === 'sepet' ? 'block' : 'none';
+  document.getElementById('tab-sorgu').style.display = tab === 'sorgu' ? '' : 'none';
+  document.getElementById('tab-sepet').style.display = tab === 'sepet' ? '' : 'none';
   var tabs = document.querySelectorAll('.tab');
   tabs[0].className = 'tab ' + (tab === 'sorgu' ? 'active' : 'inactive');
   tabs[1].className = 'tab ' + (tab === 'sepet' ? 'active' : 'inactive');
@@ -1702,7 +1712,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.30').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.31').catch(function(){}); });
 }
 
 updateConnectionState();
