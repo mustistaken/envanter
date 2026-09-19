@@ -1319,7 +1319,7 @@ function updateMobileBasketSummary() {
   var totals = getBasketTotals();
   document.getElementById('mobileBasketItems').textContent = count + ' ürün';
   document.getElementById('mobileBasketTotal').textContent = formatPrice(totals.vatIncluded);
-  summary.classList.toggle('visible', count > 0);
+  summary.classList.toggle('visible', count > 0 && document.getElementById('tab-sepet').style.display === 'none');
 }
 
 function saveCurrentBasket() {
@@ -1669,10 +1669,19 @@ function showTab(tab) {
   tabs[1].className = 'tab ' + (tab === 'sepet' ? 'active' : 'inactive');
   tabs[0].setAttribute('aria-selected', tab === 'sorgu' ? 'true' : 'false');
   tabs[1].setAttribute('aria-selected', tab === 'sepet' ? 'true' : 'false');
+  updateMobileBasketSummary();
   updateMobileSearchDock();
 }
 
 var searchTimer = null;
+
+document.getElementById('qtyInput').addEventListener('change', function(event) { setQty(event.target.value); });
+document.addEventListener('focusin', function(event) {
+  document.body.classList.toggle('editing-field', event.target.matches('input, textarea, select'));
+});
+document.addEventListener('focusout', function(event) {
+  document.body.classList.toggle('editing-field', !!event.relatedTarget && event.relatedTarget.matches('input, textarea, select'));
+});
 
 function queueProductSearch(value, sourceId) {
   var mainInput = document.getElementById('searchInput');
@@ -1854,7 +1863,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.32').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.33').catch(function(){}); });
 }
 
 updateConnectionState();
