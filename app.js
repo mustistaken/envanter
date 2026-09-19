@@ -14,6 +14,7 @@ let currentOfferNumber = '';
 let isLoadingData = false;
 let barcodeLibraryPromise = null;
 let lastModalTrigger = null;
+let storageWriteFailed = false;
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
 const NETWORK_TIMEOUT_MS = 12000;
 const EXCHANGE_RATE_URLS = {
@@ -45,6 +46,7 @@ function openLocalDesignPreview() {
 
 const USER_STORE_KEYS = new Set([
   'teknikelCurrentBasket',
+  'teknikelCurrentDiscount',
   'teknikelFavorites',
   'teknikelRecentProducts',
   'teknikelSavedBaskets',
@@ -53,26 +55,29 @@ const USER_STORE_KEYS = new Set([
   'teknikelFavoriteGroups'
 ]);
 
-function persistentStoreKey(key) {
-  return key;
-}
-
 function readStore(key, fallback) {
   try {
-    var scopedKey = persistentStoreKey(key);
-    var raw = localStorage.getItem(scopedKey);
+    var raw = localStorage.getItem(key);
     if (!raw) return fallback;
     var value = JSON.parse(raw);
+    if (Array.isArray(fallback) && !Array.isArray(value)) return fallback;
+    if (fallback && !Array.isArray(fallback) && typeof fallback === 'object' &&
+        (!value || typeof value !== 'object' || Array.isArray(value))) return fallback;
     return value == null ? fallback : value;
   } catch (e) { return fallback; }
 }
 
 function writeStore(key, value) {
   try {
-    var storageKey = persistentStoreKey(key);
-    if (value == null) localStorage.removeItem(storageKey);
-    else localStorage.setItem(storageKey, JSON.stringify(value));
-  } catch (e) {}
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    storageWriteFailed = true;
+    setBasketCloudStatus('Kayıt yapılamadı · depolama alanını kontrol edin', 'error');
+    showToast('Değişiklikler bu cihaza kaydedilemedi. Sayfayı kapatmadan kayıtlarınızı yedekleyin.');
+    return false;
+  }
 }
 
 function resetUserStoresInMemory() {
@@ -99,7 +104,11 @@ function clearLocalUserData() {
       });
       if (isCurrentUserStore || isLegacyUserStore) localStorage.removeItem(storedKey);
     }
-  } catch (e) {}
+  } catch (e) {
+    showToast('Kayıtlar tamamen silinemedi. Tarayıcının depolama izinlerini kontrol edin.');
+    return;
+  }
+  storageWriteFailed = false;
   resetUserStoresInMemory();
   loadUserStores();
   setBasketCloudStatus('Bu cihazdaki kayıtlar silindi', 'saved');
@@ -108,6 +117,7 @@ function clearLocalUserData() {
 
 function loadUserStores() {
   basket = readStore('teknikelCurrentBasket', []);
+  applyDiscountValue(readStore('teknikelCurrentDiscount', 0), false);
   favorites = readStore('teknikelFavorites', []);
   recentProducts = readStore('teknikelRecentProducts', []);
   savedBaskets = readStore('teknikelSavedBaskets', []);
@@ -130,7 +140,93 @@ function setBasketCloudStatus(message, state) {
 }
 
 function markLocalDataSaved() {
+  if (storageWriteFailed) return;
   setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
+}
+
+function exportLocalBackup() {
+  var data = {
+    teknikelCurrentBasket: basket, teknikelCurrentDiscount: iskontoOrani,
+    teknikelFavorites: favorites, teknikelRecentProducts: recentProducts,
+    teknikelSavedBaskets: savedBaskets, teknikelCustomerProfiles: customerProfiles,
+    teknikelOfferHistory: offerHistory, teknikelFavoriteGroups: favoriteGroups
+  };
+  var backup = { app: 'teknikel', version: 1, savedAt: new Date().toISOString(), data: data };
+  var objectUrl = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
+  var link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = 'teknikel-yedek-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 1000);
+}
+
+function validateBackup(backup) {
+  if (!backup || backup.app !== 'teknikel' || backup.version !== 1 || !backup.data) return false;
+  var data = backup.data;
+  function validItem(item) {
+    return item && typeof item.name === 'string' && typeof item.sheet === 'string' &&
+      typeof item.barcode === 'string' && Number.isInteger(item.qty) && item.qty >= 1 && item.qty <= 9999 &&
+      (item.price === null || (typeof item.price === 'number' && Number.isFinite(item.price) && item.price >= 0));
+  }
+  function validItems(items) { return Array.isArray(items) && items.every(validItem); }
+  function validKeys(keys) { return Array.isArray(keys) && keys.every(function(key) { return typeof key === 'string'; }); }
+  function validDiscount(value) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100; }
+  return validItems(data.teknikelCurrentBasket) && validDiscount(data.teknikelCurrentDiscount) &&
+    validKeys(data.teknikelFavorites) && validKeys(data.teknikelRecentProducts) &&
+    Array.isArray(data.teknikelSavedBaskets) && data.teknikelSavedBaskets.every(function(record) {
+      return record && typeof record.id === 'number' && typeof record.name === 'string' &&
+        typeof record.date === 'string' && validDiscount(record.discount) && validItems(record.items);
+    }) && Array.isArray(data.teknikelCustomerProfiles) && data.teknikelCustomerProfiles.every(function(record) {
+      return record && typeof record.name === 'string' && validDiscount(record.discount);
+    }) && Array.isArray(data.teknikelOfferHistory) && data.teknikelOfferHistory.every(function(record) {
+      return record && typeof record.id === 'string' && typeof record.customer === 'string' &&
+        typeof record.text === 'string' && typeof record.date === 'string' &&
+        typeof record.total === 'number' && Number.isFinite(record.total) &&
+        validDiscount(record.discount) && validItems(record.items);
+    }) && data.teknikelFavoriteGroups && typeof data.teknikelFavoriteGroups === 'object' &&
+    !Array.isArray(data.teknikelFavoriteGroups) && Object.entries(data.teknikelFavoriteGroups).every(function(entry) {
+      return !['__proto__', 'constructor', 'prototype'].includes(entry[0]) && typeof entry[1] === 'string';
+    });
+}
+
+function chooseLocalBackup() {
+  document.getElementById('backupFile').click();
+}
+
+async function importLocalBackup(event) {
+  var file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  try {
+    if (file.size > 5 * 1024 * 1024) throw new Error('Yedek dosyası 5 MB sınırını aşıyor.');
+    var backup = JSON.parse(await file.text());
+    if (!validateBackup(backup)) throw new Error('Geçerli bir Teknikel yedek dosyası seçin.');
+    if (!window.confirm('Bu cihazdaki kayıtlar yedekteki kayıtlarla değiştirilsin mi? Önce mevcut kayıtları yedekleyebilirsiniz.')) return;
+    var previous = {};
+    USER_STORE_KEYS.forEach(function(key) { previous[key] = localStorage.getItem(key); });
+    try {
+      USER_STORE_KEYS.forEach(function(key) { localStorage.setItem(key, JSON.stringify(backup.data[key])); });
+    } catch (error) {
+      USER_STORE_KEYS.forEach(function(key) {
+        try {
+          if (previous[key] === null) localStorage.removeItem(key);
+          else localStorage.setItem(key, previous[key]);
+        } catch (restoreError) {}
+      });
+      throw new Error('Depolama yetersiz; yedek yüklenemedi. Mevcut kayıtlarınızı dışa aktarın.');
+    }
+    storageWriteFailed = false;
+    currentOfferNumber = '';
+    loadUserStores();
+    migrateProductReferences();
+    renderQuickLists();
+    markLocalDataSaved();
+    showToast('Yedek geri yüklendi.');
+  } catch (error) {
+    showToast(error.message || 'Yedek okunamadı.');
+  }
 }
 
 async function fetchWithTimeout(url, options) {
@@ -186,7 +282,27 @@ async function loadExchangeRates() {
 }
 
 function productKey(product) {
-  return product ? (product.name + '|' + product.sheet) : '';
+  return product ? JSON.stringify([product.sheet || '', String(product.barcode || '').trim() || product.name || '']) : '';
+}
+
+function migrateProductReferences() {
+  function migrate(keys) {
+    return Array.from(new Set(keys.flatMap(function(key) {
+      if (key.startsWith('[')) return [key];
+      var matches = products.filter(function(product) { return product.name + '|' + product.sheet === key; });
+      if (!matches.length) return [key];
+      return matches.map(function(product) {
+        var nextKey = productKey(product);
+        if (favoriteGroups[key]) favoriteGroups[nextKey] = favoriteGroups[key];
+        return nextKey;
+      });
+    })));
+  }
+  favorites = migrate(favorites);
+  recentProducts = migrate(recentProducts).slice(0, 6);
+  writeStore('teknikelFavorites', favorites);
+  writeStore('teknikelRecentProducts', recentProducts);
+  writeStore('teknikelFavoriteGroups', favoriteGroups);
 }
 
 const MAGMAWELD_SHEETS = new Set([
@@ -291,6 +407,7 @@ function scoreProductSearch(product, query) {
 }
 
 function showToast(message) {
+  if (storageWriteFailed) message = 'Kayıt yapılamadı. Değişiklikler yalnızca açık sayfada duruyor; kayıtlarınızı yedekleyin.';
   var toast = document.getElementById('toast');
   toast.textContent = message;
   toast.classList.add('show');
@@ -353,6 +470,7 @@ function setIskonto(val, btn) {
   document.getElementById('iskontoCustom').value = '';
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
+  writeStore('teknikelCurrentDiscount', iskontoOrani);
   renderBasket();
   markLocalDataSaved();
 }
@@ -364,14 +482,16 @@ function setIskontoCustom(val) {
   if (n > 100) n = 100;
   if (val !== '' && Number(val) !== n) input.value = n;
   iskontoOrani = n;
+  writeStore('teknikelCurrentDiscount', iskontoOrani);
   document.querySelectorAll('.isk-btn').forEach(function(b){ b.classList.remove('active'); });
   renderBasket();
   markLocalDataSaved();
 }
 
-function applyDiscountValue(value) {
+function applyDiscountValue(value, persist) {
   var discount = Math.max(0, Math.min(100, Number(value) || 0));
   iskontoOrani = discount;
+  if (persist !== false) writeStore('teknikelCurrentDiscount', discount);
   var matched = false;
   document.querySelectorAll('.isk-btn').forEach(function(btn) {
     var active = btn.textContent.trim() === '%' + discount;
@@ -455,10 +575,8 @@ async function fetchSheet(cfg) {
       .map(function(row) {
         var cells = row.c;
         var barcodeValue = cells[cfg.b] ? cells[cfg.b].v : '';
-        var barcodeNumber = Number(barcodeValue);
         return {
-          barcode: barcodeValue === null || barcodeValue === undefined ? '' :
-            ((!isNaN(barcodeNumber) && isFinite(barcodeNumber)) ? String(Math.round(barcodeNumber)) : String(barcodeValue).trim()),
+          barcode: barcodeValue === null || barcodeValue === undefined ? '' : String(barcodeValue).trim(),
           name: String(cells[cfg.n].v || ''),
           price: cells[cfg.p] ? cells[cfg.p].v : null,
           updated: cfg.u !== null && cells[cfg.u] ? cells[cfg.u].v : null,
@@ -490,8 +608,6 @@ function updateOverviewStats() {
   if (productStat) productStat.textContent = products.length ? products.length.toLocaleString('tr-TR') : '—';
 }
 
-const PRODUCT_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-
 function productSnapshotKey() {
   return 'teknikelProductSnapshot';
 }
@@ -503,7 +619,7 @@ function readProductSnapshot() {
     var snapshot = JSON.parse(raw);
     var syncedAtMs = Date.parse(snapshot && snapshot.syncedAt || '');
     if (!snapshot || !Array.isArray(snapshot.products) || !snapshot.products.length ||
-        !isFinite(syncedAtMs) || Date.now() - syncedAtMs > PRODUCT_SNAPSHOT_MAX_AGE_MS) {
+        !isFinite(syncedAtMs)) {
       return null;
     }
     return snapshot;
@@ -522,13 +638,16 @@ function writeProductSnapshot(snapshot) {
 
 function applyProductSnapshot(snapshot, cached) {
   products = snapshot.products;
-  applyPriceChanges();
+  migrateProductReferences();
+  if (!cached) applyPriceChanges();
+  else products.forEach(function(product) { delete product.previousPrice; delete product.priceChange; });
   populateCategories();
   populateBrands();
   renderCriticalStocks();
   renderQuickLists();
   updateOverviewStats();
   setLastSync(snapshot.syncedAt, cached);
+  search(document.getElementById('searchInput').value);
   document.getElementById('infoBox').textContent = products.length + ' ürün ' +
     (cached ? 'hazır. Güncel veri arka planda kontrol ediliyor…' : 'senkronize edildi.') +
     (snapshot.failedCount ? ' ' + snapshot.failedCount + ' sayfa yüklenemedi.' : '');
@@ -546,13 +665,17 @@ async function loadData(manual) {
   sk.className = 'skeleton-line';
   infoBoxEl.appendChild(sk);
 
-  var cachedSnapshot = manual ? null : readProductSnapshot();
-  if (cachedSnapshot) applyProductSnapshot(cachedSnapshot, true);
+  var cachedSnapshot = readProductSnapshot();
+  if (cachedSnapshot && !manual) applyProductSnapshot(cachedSnapshot, true);
 
   try {
     const results = await Promise.all(SHEETS.map(fetchSheet));
     const failedCount = results.filter(function(result){ return result === null; }).length;
-    const freshProducts = results.filter(Array.isArray).flat();
+    if (failedCount === SHEETS.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
+    const previousProducts = products.length ? products : (cachedSnapshot ? cachedSnapshot.products : []);
+    const freshProducts = results.flatMap(function(result, index) {
+      return result === null ? previousProducts.filter(function(product) { return product.sheet === SHEETS[index].name; }) : result;
+    });
     if (!freshProducts.length) throw new Error('Hiçbir ürün sayfası yüklenemedi');
 
     var freshSnapshot = {
@@ -560,15 +683,22 @@ async function loadData(manual) {
       syncedAt: new Date().toISOString(),
       failedCount: failedCount
     };
-    writeProductSnapshot(freshSnapshot);
+    if (!failedCount) writeProductSnapshot(freshSnapshot);
     applyProductSnapshot(freshSnapshot, false);
-    if (manual) showToast('Ürün verileri yenilendi.');
+    if (failedCount) {
+      document.getElementById('infoBox').textContent = failedCount + ' sayfa yenilenemedi. Bu sayfalarda varsa önceki kayıtlar gösteriliyor; fiyatları doğrulayın.';
+      document.getElementById('lastSyncText').textContent = 'Kısmi güncelleme · bazı veriler eski olabilir';
+    }
+    if (manual) showToast(failedCount ? 'Güncelleme kısmen tamamlandı.' : 'Ürün verileri yenilendi.');
   } catch(e) {
     if (cachedSnapshot) {
       applyProductSnapshot(cachedSnapshot, true);
       document.getElementById('infoBox').textContent =
         cachedSnapshot.products.length + ' ürün hızlı önbellekten gösteriliyor. Güncel veri alınamadı.';
       showToast('Güncelleme tamamlanamadı; son başarılı veriler gösteriliyor.');
+    } else if (products.length) {
+      document.getElementById('infoBox').textContent = 'Güncel veri alınamadı. Açık sayfadaki önceki kayıtlar korunuyor.';
+      setLastSync('', false);
     } else {
       products = [];
       populateCategories();
@@ -634,12 +764,14 @@ function populateBrands() {
 }
 
 function applyPriceChanges() {
-  var previous = readStore('teknikelPriceSnapshot', {});
+  var previous = readStore('teknikelPriceSnapshotV2', {});
   var next = {};
   products.forEach(function(product) {
     var key = productKey(product);
     var price = Number(product.price);
-    if (!isNaN(price) && isFinite(price)) {
+    delete product.previousPrice;
+    delete product.priceChange;
+    if (product.price != null && product.price !== '' && !isNaN(price) && isFinite(price)) {
       next[key] = price;
       if (Object.prototype.hasOwnProperty.call(previous, key) && Number(previous[key]) !== price) {
         product.previousPrice = Number(previous[key]);
@@ -647,7 +779,7 @@ function applyPriceChanges() {
       }
     }
   });
-  writeStore('teknikelPriceSnapshot', next);
+  writeStore('teknikelPriceSnapshotV2', Object.assign({}, previous, next));
 }
 
 function getPriceChangeText(product) {
@@ -895,7 +1027,7 @@ function renderQuickLists() {
   var el = document.getElementById('quickLists');
   var card = document.getElementById('quickAccessCard');
   while (el.firstChild) el.removeChild(el.firstChild);
-  var grouped = {};
+  var grouped = Object.create(null);
   favorites.forEach(function(key) {
     var group = favoriteGroups[key] || 'Favoriler';
     if (!grouped[group]) grouped[group] = [];
@@ -936,6 +1068,10 @@ function renderQuickLists() {
   if (card) card.hidden = false;
 }
 
+function money(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
 function search(q) {
   q = q.trim();
   var sugEl = document.getElementById('suggestions');
@@ -952,6 +1088,10 @@ function search(q) {
     document.getElementById('resStatus').style.color = '#888';
     document.getElementById('resDate').textContent   = '—';
     document.getElementById('resSource').textContent = 'Kaynak seçildiğinde burada görünür';
+    document.getElementById('resultBrandChip').textContent = 'Marka bekleniyor';
+    document.getElementById('resultCategoryChip').textContent = 'Kategori bekleniyor';
+    document.getElementById('resultStockChip').textContent = 'Durum bekleniyor';
+    document.getElementById('resultStockChip').className = 'meta-chip meta-chip--neutral';
     document.getElementById('favoriteBtn').classList.remove('active');
     document.getElementById('favoriteBtn').textContent = '☆';
     document.getElementById('addBtn').disabled       = true;
@@ -997,6 +1137,7 @@ function search(q) {
   });
 
   var fuzzyUsed = scoredMatches.length > 0 && scoredMatches.every(function(item){ return item.fuzzy; });
+  if (!fuzzyUsed) scoredMatches = scoredMatches.filter(function(item) { return !item.fuzzy; });
   var matches = scoredMatches.map(function(item){ return item.product; });
 
   if (matches.length === 0) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
@@ -1041,8 +1182,8 @@ function addToBasket() {
   if (!Number.isInteger(qty) || qty < 1) qty = 1;
   if (qty > 9999) qty = 9999;
   qtyEl.value = qty;
-  var key = currentProduct.name + '|' + currentProduct.sheet;
-  var existing = basket.find(i => (i.name + '|' + i.sheet) === key);
+  var key = productKey(currentProduct);
+  var existing = basket.find(i => productKey(i) === key);
   if (existing) {
     existing.qty = Math.min(9999, existing.qty + qty);
   } else {
@@ -1115,10 +1256,13 @@ function renderBasket() {
   table.appendChild(thead);
   var tbody = document.createElement('tbody');
   basket.forEach(function(item, idx){
-    var sub = item.price != null ? Number(item.price) * item.qty : 0;
+    var sub = item.price != null ? money(money(item.price) * item.qty) : 0;
     total += sub;
     var tr = document.createElement('tr'); tr.className = 'item-row';
     var tdName = document.createElement('td'); tdName.textContent = item.name;
+    var productCode = document.createElement('small');
+    productCode.textContent = ' · ' + (item.barcode || item.sheet || '');
+    tdName.appendChild(productCode);
     var tdPrice = document.createElement('td'); tdPrice.textContent = formatPrice(item.price);
     var tdQty = document.createElement('td');
     var spanQty = document.createElement('span'); spanQty.className = 'basket-qty';
@@ -1134,21 +1278,22 @@ function renderBasket() {
   });
   table.appendChild(tbody);
   var tfoot = document.createElement('tfoot');
+  var totals = getBasketTotals();
   if (iskontoOrani > 0) {
     var tr1 = document.createElement('tr'); tr1.className = 'iskonto';
     var td1a = document.createElement('td'); td1a.setAttribute('colspan','3'); td1a.style.textAlign = 'right'; td1a.style.paddingRight = '10px'; td1a.textContent = '%' + iskontoOrani + ' İskonto';
-    var td1b = document.createElement('td'); td1b.setAttribute('colspan','2'); td1b.textContent = '-' + formatPrice(total * (iskontoOrani/100));
+    var td1b = document.createElement('td'); td1b.setAttribute('colspan','2'); td1b.textContent = '-' + formatPrice(totals.discount);
     tr1.appendChild(td1a); tr1.appendChild(td1b);
     tfoot.appendChild(tr1);
     var tr2 = document.createElement('tr'); tr2.className = 'iskonto-sonrasi';
     var td2a = document.createElement('td'); td2a.setAttribute('colspan','3'); td2a.style.textAlign = 'right'; td2a.style.paddingRight = '10px'; td2a.textContent = 'İskonto Sonrası Toplam';
-    var td2b = document.createElement('td'); td2b.setAttribute('colspan','2'); td2b.textContent = formatPrice(total - (total * (iskontoOrani/100)));
+    var td2b = document.createElement('td'); td2b.setAttribute('colspan','2'); td2b.textContent = formatPrice(totals.discounted);
     tr2.appendChild(td2a); tr2.appendChild(td2b);
     tfoot.appendChild(tr2);
   }
   var trKdv = document.createElement('tr'); trKdv.className = 'kdv-dahil';
   var tdK1 = document.createElement('td'); tdK1.setAttribute('colspan','3'); tdK1.style.textAlign = 'right'; tdK1.style.paddingRight = '10px'; tdK1.textContent = 'KDV Dahil Toplam (%20)';
-  var tdK2 = document.createElement('td'); tdK2.setAttribute('colspan','2'); tdK2.textContent = formatPrice((total - (total * (iskontoOrani/100))) * 1.20);
+  var tdK2 = document.createElement('td'); tdK2.setAttribute('colspan','2'); tdK2.textContent = formatPrice(totals.vatIncluded);
   trKdv.appendChild(tdK1); trKdv.appendChild(tdK2);
   tfoot.appendChild(trKdv);
   table.appendChild(tfoot);
@@ -1159,11 +1304,12 @@ function renderBasket() {
 
 function getBasketTotals() {
   var total = basket.reduce(function(sum, item) {
-    return sum + ((Number(item.price) || 0) * (Number(item.qty) || 0));
+    return sum + money(money(Number(item.price) || 0) * (Number(item.qty) || 0));
   }, 0);
-  var discount = total * (iskontoOrani / 100);
-  var discounted = total - discount;
-  return { total: total, discount: discount, discounted: discounted, vatIncluded: discounted * 1.20 };
+  total = money(total);
+  var discount = money(total * (iskontoOrani / 100));
+  var discounted = money(total - discount);
+  return { total: total, discount: discount, discounted: discounted, vatIncluded: money(discounted * 1.20) };
 }
 
 function updateMobileBasketSummary() {
@@ -1232,7 +1378,9 @@ function deleteSavedBasket(id) {
 }
 
 function csvCell(value) {
-  return '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
+  var text = String(value == null ? '' : value);
+  if (typeof value === 'string' && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
 }
 
 function downloadCsv(filename, rows) {
@@ -1253,7 +1401,7 @@ function exportBasketCsv() {
   var totals = getBasketTotals();
   var rows = [['Ürün', 'Kategori', 'Birim fiyat', 'Adet', 'Toplam']];
   basket.forEach(function(item) {
-    rows.push([item.name, item.sheet, item.price, item.qty, (Number(item.price) || 0) * item.qty]);
+    rows.push([item.name, item.sheet, money(Number(item.price) || 0), item.qty, money(money(Number(item.price) || 0) * item.qty)]);
   });
   rows.push([], ['İskonto oranı', iskontoOrani + '%'], ['KDV dahil toplam', totals.vatIncluded]);
   downloadCsv('teknikel-sepet-' + new Date().toISOString().slice(0, 10) + '.csv', rows);
@@ -1264,7 +1412,11 @@ function ensureOfferNumber() {
   if (currentOfferNumber) return currentOfferNumber;
   var year = new Date().getFullYear();
   var key = 'teknikelOfferSequence_' + year;
-  var sequence = Number(readStore(key, 0)) + 1;
+  var highest = offerHistory.reduce(function(maximum, record) {
+    var match = String(record.id).match(/^TKL-(\d{4})-(\d+)$/);
+    return match && Number(match[1]) === year ? Math.max(maximum, Number(match[2])) : maximum;
+  }, Number(readStore(key, 0)) || 0);
+  var sequence = highest + 1;
   writeStore(key, sequence);
   currentOfferNumber = 'TKL-' + year + '-' + String(sequence).padStart(3, '0');
   return currentOfferNumber;
@@ -1321,7 +1473,7 @@ function buildOfferText() {
   ];
   basket.forEach(function(item, index) {
     lines.push((index + 1) + '. ' + item.name + ' — ' + item.qty + ' adet × ' + formatPrice(item.price) +
-      ' = ' + formatPrice((Number(item.price) || 0) * item.qty));
+      ' = ' + formatPrice(money(money(Number(item.price) || 0) * item.qty)));
   });
   lines.push('', 'Ara toplam: ' + formatPrice(totals.total));
   if (iskontoOrani > 0) lines.push('İskonto (%' + iskontoOrani + '): -' + formatPrice(totals.discount));
@@ -1433,7 +1585,7 @@ function copyTextFallback(text, successMessage) {
   document.body.appendChild(area);
   area.select();
   try {
-    document.execCommand('copy');
+    if (!document.execCommand('copy')) throw new Error('Kopyalama başarısız');
     showToast(successMessage);
   } catch (e) {
     showToast('Metin kopyalanamadı.');
@@ -1454,23 +1606,15 @@ function printOffer() {
     var html = '<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teknikel Teklif</title>' +
       '<style>body{font-family:Arial,sans-serif;color:#142033;padding:72px 24px 40px;line-height:1.6;background:#f4f7fb}.back-btn{position:fixed;top:14px;left:14px;z-index:10;display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #cbd9e8;border-radius:999px;background:#fff;color:#12345a;box-shadow:0 8px 22px rgba(18,52,90,.14);font-weight:700;cursor:pointer}.box{border:1px solid #dce5f0;border-radius:16px;padding:24px;max-width:760px;margin:0 auto;background:#fff}h1{color:#12345a;margin:0 0 20px}small{color:#718099}@media print{body{padding:0;background:#fff}.back-btn{display:none}.box{border:0;padding:0;max-width:none}}</style></head>' +
       '<body><button class="back-btn" type="button" id="printBackBtn" aria-label="Envantere geri dön">← Geri</button><div class="box"><h1>Teknikel Fiyat Teklifi</h1><div>' + text + '</div><br><small>Bu belge Akıllı Envanter üzerinden hazırlanmıştır.</small></div>' +
-      '<script>(function(){try{var b=document.getElementById("printBackBtn"); if(b) b.addEventListener("click", function(){ window.close(); });}catch(e){}})();</script>' +
+      '<script>(function(){document.getElementById("printBackBtn").addEventListener("click",function(){window.close();});window.addEventListener("load",function(){setTimeout(function(){window.print();},200);});})();</script>' +
       '</body></html>';
 
     var blob = new Blob([html], { type: 'text/html' });
     objectUrl = URL.createObjectURL(blob);
-    win = window.open(objectUrl, '_blank', 'noopener');
+    win = window.open(objectUrl, '_blank');
     if (!win) { showToast('Yazdırma penceresi açılamadı.'); URL.revokeObjectURL(objectUrl); return; }
-
-    // Try to print when the new window loads, with fallbacks
-    try {
-      if (win.addEventListener) {
-        win.addEventListener('load', function() { setTimeout(function(){ try{ win.print(); } catch(e){} }, 200); }, { once: true });
-      }
-    } catch (e) {}
-
-    // Fallback attempt after a short delay
-    setTimeout(function(){ try{ win.print(); } catch(e){}; setTimeout(function(){ if (objectUrl) URL.revokeObjectURL(objectUrl); }, 1000); }, 500);
+    win.opener = null;
+    setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, 60000);
   } catch (err) {
     if (win && win.close) try { win.close(); } catch (e) {}
     if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -1570,6 +1714,7 @@ window.addEventListener('resize', updateMobileSearchDock);
 });
 document.getElementById('iskontoCustom').addEventListener('input', function(e){ setIskontoCustom(e.target.value); });
 document.getElementById('customerName').addEventListener('change', applyCustomerProfile);
+document.getElementById('backupFile').addEventListener('change', importLocalBackup);
 document.getElementById('offerModal').addEventListener('click', function(e) {
   if (e.target === this) closeOfferModal();
 });
@@ -1591,9 +1736,6 @@ document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
   closeOfferModal();
   closeProductDetail();
-  closeAdminModal();
-  closeAddProductModal();
-  closeAccessModal();
   if (document.getElementById('overlay').classList.contains('active')) stopCam();
 });
 
@@ -1712,7 +1854,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.31').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.32').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -1729,6 +1871,6 @@ else {
   removeRetiredDemoData();
   loadData();
   loadExchangeRates();
-  setBasketCloudStatus('Bu cihazda saklanıyor', 'saved');
+  markLocalDataSaved();
 }
 

@@ -7,7 +7,7 @@
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://docs.google.com">
-<link rel="stylesheet" href="styles.css?v=14.31">
+<link rel="stylesheet" href="styles.css?v=14.32">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -32,6 +32,9 @@
               <button class="utility-action" id="themeBtn" data-action="toggleTheme">Tema: Otomatik</button>
               <button class="utility-action install-btn" id="installBtn">Uygulamayı yükle</button>
               <button class="utility-action" data-action="clearLocalUserData">Bu cihazdaki kayıtları sil</button>
+              <button class="utility-action" data-action="exportLocalBackup">Kayıtları yedekle</button>
+              <button class="utility-action" data-action="chooseLocalBackup">Yedeği geri yükle</button>
+              <input type="file" id="backupFile" accept=".json,application/json" hidden>
             </div>
           </details>
         </div>
@@ -342,7 +345,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=14.31"></script>
+<script src="app.js?v=14.32"></script>
 </body>
 </html>
 

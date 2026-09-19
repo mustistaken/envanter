@@ -515,6 +515,7 @@ body.dark #resPrice { background: #102b3c !important; }
 body.dark .stock-alert-card { background: #1f1d17; border-color: #5c4821; }
 body.dark .critical-stock-row { background: #171f28; border-color: #564724; }
 body.dark .tool-btn, body.dark .qty-btn, body.dark .favorite-btn { background: #142437; color: var(--ink-700); border-color: #2a4057; }
+body.dark .isk-btn:not(.active) { background: #142437; color: #dce7f3; border-color: #2a4057; }
 body.dark .mobile-search-dock { background: rgba(16,29,44,.97); border-color: #2a4057; }
 body.dark .mobile-search-dock input { color: var(--ink-900); }
 .pulse-result { animation: resultPulse .28s ease; }
@@ -558,7 +559,6 @@ body.dark .mobile-search-dock input { color: var(--ink-900); }
   .utility-menu summary { width: 40px; height: 40px; }
   .last-sync { max-width: 175px; font-size: 11px; }
   .basket-sync-status { min-height: 28px; padding: 5px 8px; font-size: 10px; }
-  .install-btn { display: none !important; }
   .utility-menu-panel { position: fixed; top: 76px; right: 14px; }
   .overview-grid { grid-template-columns: 1fr 1fr; }
   .overview-card { min-height: 104px; padding: 15px; }
@@ -580,7 +580,7 @@ body.dark .mobile-search-dock input { color: var(--ink-900); }
     font-size: 13px; font-weight: 750;
   }
   .mobile-basket-summary.visible {
-    position: fixed; left: 16px; right: 16px; bottom: 82px; z-index: 940;
+    position: fixed; left: 16px; right: 16px; bottom: calc(82px + env(safe-area-inset-bottom, 0px)); z-index: 940;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     min-height: 58px; max-width: 650px; margin: 0 auto; padding: 10px 16px;
     border: 1px solid rgba(255,255,255,.16); border-radius: 16px;
@@ -592,7 +592,7 @@ body.dark .mobile-search-dock input { color: var(--ink-900); }
   .mobile-basket-summary small { color: rgba(255,255,255,.65); font-size: 8px; font-weight: 900; letter-spacing: .12em; }
   .mobile-basket-summary strong { font-size: 13px; }
   .tabs {
-    position: fixed; left: 10px; right: 10px; bottom: 10px; top: auto; z-index: 950;
+    position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); top: auto; z-index: 950;
     width: auto; max-width: 660px; margin: 0 auto;
     box-shadow: 0 14px 40px rgba(7,20,38,.22);
   }
