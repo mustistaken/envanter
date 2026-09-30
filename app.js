@@ -12,11 +12,15 @@ let deferredInstallPrompt = null;
 let toastTimer = null;
 let currentOfferNumber = '';
 let isLoadingData = false;
+let liveRefreshPromise = null;
+let lastLiveRefreshAt = 0;
+let autoRefreshTimer = null;
 let barcodeLibraryPromise = null;
 let lastModalTrigger = null;
 let storageWriteFailed = false;
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
 const NETWORK_TIMEOUT_MS = 12000;
+const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EXCHANGE_RATE_URLS = {
   eur: 'https://api.frankfurter.dev/v2/rate/EUR/TRY',
   usd: 'https://api.frankfurter.dev/v2/rate/USD/TRY'
@@ -241,7 +245,7 @@ async function fetchWithTimeout(url, options) {
 
 function formatExchangeRate(value) {
   var number = Number(value);
-  if (!isFinite(number)) return '—';
+  if (value == null || value === '' || !isFinite(number) || number <= 0) return '—';
   return number.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
 }
 
@@ -273,7 +277,8 @@ async function loadExchangeRates() {
       date: values[0].date || values[1].date || new Date().toISOString().slice(0, 10),
       savedAt: Date.now()
     };
-    if (!isFinite(record.eurTry) || !isFinite(record.usdTry)) throw new Error('Kur verisi geçersiz');
+    if (!isFinite(record.eurTry) || !isFinite(record.usdTry) ||
+        record.eurTry <= 0 || record.usdTry <= 0) throw new Error('Kur verisi geçersiz');
     writeStore('teknikelExchangeRates', record);
     renderExchangeRates(record, false);
   } catch (e) {
@@ -560,6 +565,23 @@ function removeRetiredDemoData() {
   writeStore('teknikelFavoriteGroups', favoriteGroups);
 }
 
+function isProductRecord(product) {
+  if (!product || !normalizeText(product.name)) return false;
+  var name = normalizeText(product.name);
+  var barcode = String(product.barcode == null ? '' : product.barcode).trim();
+  var normalizedBarcode = normalizeText(barcode);
+  if (name === 'urun adi' || normalizedBarcode === 'urun kodu' ||
+      normalizedBarcode === 'barkod' || normalizedBarcode === 'barkod no') return false;
+
+  var hasPrice = product.price != null && product.price !== '' && Number.isFinite(Number(product.price));
+  var hasStock = product.stock != null && product.stock !== '' && Number.isFinite(Number(product.stock));
+  // Catalogue sections use empty or short numeric group codes (for example 711), without a price.
+  // Keep inventory rows, zero prices and genuine SKU records whose price is temporarily missing.
+  if (product.sheet !== 'Envanter' && !hasPrice && !hasStock &&
+      (!barcode || /^\d{1,3}$/.test(barcode))) return false;
+  return true;
+}
+
 async function fetchSheet(cfg) {
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
@@ -570,7 +592,10 @@ async function fetchSheet(cfg) {
     const match = text.match(/setResponse\(([\s\S]*?)\);/);
     if (!match) throw new Error('Geçersiz Google Sheets yanıtı');
     const data = JSON.parse(match[1]);
-    return (data.table.rows || [])
+    if (data.status !== 'ok' || !data.table || !Array.isArray(data.table.rows)) {
+      throw new Error('Google Sheets verisi alınamadı');
+    }
+    return data.table.rows
       .filter(function(row) { return row.c && row.c[cfg.n] && row.c[cfg.n].v; })
       .map(function(row) {
         var cells = row.c;
@@ -583,7 +608,7 @@ async function fetchSheet(cfg) {
           stock: cfg.s !== null && cells[cfg.s] ? Number(cells[cfg.s].v) : null,
           sheet: cfg.name
         };
-      });
+      }).filter(isProductRecord);
   } catch (error) {
     console.warn(cfg.name + ' yüklenemedi:', error);
     return null;
@@ -622,7 +647,8 @@ function readProductSnapshot() {
         !isFinite(syncedAtMs)) {
       return null;
     }
-    return snapshot;
+    snapshot.products = snapshot.products.filter(isProductRecord);
+    return snapshot.products.length ? snapshot : null;
   } catch (e) {
     return null;
   }
@@ -637,7 +663,7 @@ function writeProductSnapshot(snapshot) {
 }
 
 function applyProductSnapshot(snapshot, cached) {
-  products = snapshot.products;
+  products = snapshot.products.filter(isProductRecord);
   migrateProductReferences();
   if (!cached) applyPriceChanges();
   else products.forEach(function(product) { delete product.previousPrice; delete product.priceChange; });
@@ -666,7 +692,7 @@ async function loadData(manual) {
   infoBoxEl.appendChild(sk);
 
   var cachedSnapshot = readProductSnapshot();
-  if (cachedSnapshot && !manual) applyProductSnapshot(cachedSnapshot, true);
+  if (cachedSnapshot && !manual && !products.length) applyProductSnapshot(cachedSnapshot, true);
 
   try {
     const results = await Promise.all(SHEETS.map(fetchSheet));
@@ -717,8 +743,32 @@ async function loadData(manual) {
   }
 }
 
+function refreshLiveData(manual) {
+  if (liveRefreshPromise) return liveRefreshPromise;
+  lastLiveRefreshAt = Date.now();
+  liveRefreshPromise = Promise.all([loadData(manual), loadExchangeRates()]).finally(function() {
+    liveRefreshPromise = null;
+  });
+  return liveRefreshPromise;
+}
+
 function refreshData() {
-  loadData(true);
+  return refreshLiveData(true);
+}
+
+function refreshIfDue() {
+  if (document.hidden || navigator.onLine === false) return;
+  if (Date.now() - lastLiveRefreshAt >= AUTO_REFRESH_INTERVAL_MS) return refreshLiveData(false);
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer !== null) return;
+  autoRefreshTimer = setInterval(refreshIfDue, AUTO_REFRESH_INTERVAL_MS);
+  document.addEventListener('visibilitychange', refreshIfDue);
+  window.addEventListener('pageshow', refreshIfDue);
+  window.addEventListener('online', function() {
+    if (!document.hidden) refreshLiveData(false);
+  });
 }
 
 function populateCategories() {
@@ -1176,7 +1226,7 @@ function clearAdvancedFilters() {
 }
 
 function addToBasket() {
-  if (!currentProduct) return;
+  if (!isProductRecord(currentProduct)) return;
   var qtyEl = document.getElementById('qtyInput');
   var qty = parseInt(qtyEl.value, 10);
   if (!Number.isInteger(qty) || qty < 1) qty = 1;
@@ -1863,7 +1913,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.33').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.34').catch(function(){}); });
 }
 
 updateConnectionState();
@@ -1878,8 +1928,8 @@ if (isLocalDesignPreview()) openLocalDesignPreview();
 else {
   loadUserStores();
   removeRetiredDemoData();
-  loadData();
-  loadExchangeRates();
+  refreshLiveData(false);
+  startAutoRefresh();
   markLocalDataSaved();
 }
 

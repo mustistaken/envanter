@@ -1,6 +1,13 @@
 # Teknikel
 
-## 14.32
+## 14.34
+
+- Ürün verileri ve USD/EUR referans kurları, site görünür ve çevrimiçiyken 5 dakikada bir kontrol edilir. Uygulamaya geri dönüldüğünde süresi dolmuş veriler, internet geri geldiğinde ise veriler hemen yenilenir.
+- “Veriyi yenile” düğmesi hem ürünleri hem kur göstergesini günceller. Aynı anda başlayan yenilemeler tek istekte birleştirilir.
+- Tablo başlıkları ve fiyatsız kategori grupları ürün listesine alınmaz; eski ürün önbelleği de aynı kontrolden geçer.
+- Regresyon kontrolleri: `node --test scripts/inventory-regression.test.cjs`.
+
+## Önceki davranışlar
 
 - Ürün kimliği kategori ve barkoddan oluşturulur. Barkodsuz kayıtlarda ürün adı kullanılır.
 - Eski favoriler aynı adı taşıyan tüm mevcut barkodlara taşınır. Eski sürümde birleşmiş sepet satırlarının kaybolan barkod/adet bilgisi geri üretilemez; bu sepetler kullanıcı tarafından kontrol edilmelidir.
