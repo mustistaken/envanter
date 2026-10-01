@@ -1,27 +1,39 @@
-const CACHE_NAME = 'teknikel-v14-35';
+const CACHE_NAME = 'teknikel-v14-36';
 const APP_SHELL = [
-  './',
-  './index.html',
-  './styles.css?v=14.35',
-  './app.js?v=14.35',
-  './manifest.json',
-  './magmaweld-logo.png',
-  './icon.png'
+  './', './index.html', './styles.css?v=14.36', './app.js?v=14.36',
+  './manifest.json', './magmaweld-logo.png', './icon.png'
 ];
+const NAVIGATION_TIMEOUT_MS = 8000;
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(key => key.startsWith('teknikel-') && key !== CACHE_NAME).map(key => caches.delete(key))
-    ))
-  );
-  self.clients.claim();
+  event.waitUntil(caches.keys().then(keys => Promise.all(
+    keys.filter(key => key.startsWith('teknikel-') && key !== CACHE_NAME).map(key => caches.delete(key))
+  )).then(() => self.clients.claim()));
 });
+
+async function fetchNavigation(request) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NAVIGATION_TIMEOUT_MS);
+  try {
+    const response = await fetch(request, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    // Keep the timeout active until the body has arrived, too.
+    await response.clone().arrayBuffer();
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function unavailableResponse() {
+  return new Response('Uygulama açılamadı. İnternet bağlantısını kontrol edip yeniden deneyin.', {
+    status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
+}
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
@@ -29,32 +41,34 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request, { cache: 'no-store' }).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy)));
-        }
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const response = await fetchNavigation(event.request);
+        try { await cache.put('./index.html', response.clone()); } catch (error) {}
         return response;
-      }).catch(() => caches.match('./index.html', { ignoreSearch: true }))
-    );
+      } catch (error) {
+        return await cache.match('./index.html') || unavailableResponse();
+      }
+    })());
     return;
   }
 
-  const isAppAsset = APP_SHELL.some(asset => {
-    const assetUrl = new URL(asset, self.registration.scope);
-    return assetUrl.pathname === url.pathname;
-  });
+  const isAppAsset = APP_SHELL.some(asset => new URL(asset, self.registration.scope).pathname === url.pathname);
   if (!isAppAsset) return;
-
-  event.respondWith(
-    fetch(event.request, { cache: 'no-store' }).then(response => {
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // Exact version matching avoids mixing JS/CSS releases when offline.
+    const cached = await cache.match(event.request);
+    if (cached) return cached;
+    try {
+      const response = await fetch(event.request);
       if (response.ok) {
-        const copy = response.clone();
-        event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)));
+        try { await cache.put(event.request, response.clone()); } catch (error) {}
       }
       return response;
-    }).catch(() => caches.match(event.request, { ignoreSearch: true }))
-  );
+    } catch (error) {
+      return unavailableResponse();
+    }
+  })());
 });
-

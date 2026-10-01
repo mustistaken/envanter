@@ -22,6 +22,44 @@ const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/
 const NETWORK_TIMEOUT_MS = 12000;
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EXCHANGE_RATE_CACHE_KEY = 'teknikelSheetExchangeRates';
+const productSearchTerms = new WeakMap();
+
+function priceNumber(value) {
+  if ((typeof value !== 'number' && typeof value !== 'string') ||
+      (typeof value === 'string' && !value.trim())) return null;
+  var number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function hasUsablePrice(product) {
+  return !!product && priceNumber(product.price) !== null && !product.priceIssue;
+}
+
+function uniqueProductRecords(records) {
+  var seen = new Set();
+  return records.filter(isProductRecord).filter(function(product) {
+    var signature = JSON.stringify([productKey(product), product.name, product.price, product.stock, product.updated, product.priceIssue]);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
+function cataloguePriceIssue(cells, cfg) {
+  if (cfg.name === 'Envanter') return '';
+  var source = cells[cfg.name.startsWith('MW ') || cfg.name === 'Trafimet' ? 2 : 3];
+  var sourcePrice = source && priceNumber(source.v);
+  var tryPrice = cells[cfg.p] && priceNumber(cells[cfg.p].v);
+  if (sourcePrice == null || tryPrice == null || sourcePrice === 0) return '';
+  var display = source.f || '';
+  var foreign = /[$€]|\b(?:USD|EUR)\b/.test(display);
+  var local = /₺|\b(?:TL|TRY)\b/.test(display);
+  if ((foreign && money(sourcePrice) === money(tryPrice)) ||
+      (local && money(sourcePrice) !== money(tryPrice))) {
+    return 'Para birimi ve TL fiyatı uyumsuz. Sheet formülünü ve kaynak fiyatı doğrulayın.';
+  }
+  return '';
+}
 
 function isLocalDesignPreview() {
   return (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
@@ -234,7 +272,9 @@ async function fetchWithTimeout(url, options) {
   var controller = new AbortController();
   var timeout = setTimeout(function() { controller.abort(); }, NETWORK_TIMEOUT_MS);
   try {
-    return await fetch(url, Object.assign({}, options || {}, { signal: controller.signal }));
+    var response = await fetch(url, Object.assign({}, options || {}, { signal: controller.signal }));
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return await response.text();
   } finally {
     clearTimeout(timeout);
   }
@@ -250,7 +290,7 @@ function renderExchangeRates(record, cached) {
   document.getElementById('eurTryRate').textContent = formatExchangeRate(record && record.eurTry);
   document.getElementById('usdTryRate').textContent = formatExchangeRate(record && record.usdTry);
   var dateEl = document.getElementById('exchangeRateDate');
-  dateEl.textContent = record ? (cached ? 'Son kayıt · ' : 'Sheet kuru · ') +
+  dateEl.textContent = record ? (cached ? 'Son kayıt · ' : 'Sheet kontrolü · ') +
     new Date(record.savedAt).toLocaleString('tr-TR') : 'Sheet kuru alınamadı';
 }
 
@@ -262,9 +302,8 @@ async function loadExchangeRates() {
   try {
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
       '/gviz/tq?tqx=out:json&sheet=Kurlar&range=A1:B3&headers=1';
-    var response = await fetchWithTimeout(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error('Sheet kuru alınamadı');
-    var match = (await response.text()).match(/setResponse\(([\s\S]*?)\);/);
+    var responseText = await fetchWithTimeout(url, { cache: 'no-store' });
+    var match = responseText.match(/setResponse\(([\s\S]*?)\);/);
     var data = match && JSON.parse(match[1]);
     if (!data || data.status !== 'ok' || !data.table || !Array.isArray(data.table.rows)) throw new Error('Kur verisi geçersiz');
     var values = {};
@@ -330,75 +369,83 @@ function normalizeText(value) {
 }
 
 function similarity(a, b) {
-  a = normalizeText(a); b = normalizeText(b);
+  return normalizedSimilarity(normalizeText(a), normalizeText(b));
+}
+
+function normalizedSimilarity(a, b) {
   if (!a || !b) return 0;
   if (a.includes(b) || b.includes(a)) return 1;
-  function pairs(s) {
-    var out = [];
-    for (var i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
-    return out;
+  var counts = new Map();
+  for (var i = 0; i < b.length - 1; i++) {
+    var pair = b.slice(i, i + 2);
+    counts.set(pair, (counts.get(pair) || 0) + 1);
   }
-  var ap = pairs(a), bp = pairs(b), hits = 0, used = {};
-  ap.forEach(function(pair) {
-    for (var i = 0; i < bp.length; i++) {
-      if (!used[i] && bp[i] === pair) { used[i] = true; hits++; break; }
-    }
-  });
-  return (2 * hits) / Math.max(1, ap.length + bp.length);
+  var hits = 0;
+  for (var j = 0; j < a.length - 1; j++) {
+    var part = a.slice(j, j + 2);
+    var count = counts.get(part) || 0;
+    if (count) { hits++; counts.set(part, count - 1); }
+  }
+  return (2 * hits) / Math.max(1, a.length + b.length - 2);
 }
 
 function compactSearchText(value) {
   return normalizeText(value).replace(/\s+/g, '');
 }
 
-function scoreProductSearch(product, query) {
-  var normalizedQuery = normalizeText(query);
-  if (!normalizedQuery) return { score: 1, fuzzy: false };
+function prepareSearchQuery(query) {
+  var normalized = normalizeText(query);
+  return { normalized: normalized, compact: normalized.replace(/\s+/g, ''), tokens: normalized.split(' ').filter(Boolean) };
+}
 
+function getProductSearchTerms(product) {
+  var terms = productSearchTerms.get(product);
+  if (terms) return terms;
   var name = normalizeText(product.name);
   var barcode = normalizeText(product.barcode);
   var sheet = normalizeText(product.sheet);
   var haystack = [name, barcode, sheet].filter(Boolean).join(' ');
-  var compactQuery = compactSearchText(normalizedQuery);
-  var compactName = compactSearchText(name);
-  var compactHaystack = compactSearchText(haystack);
-  var queryTokens = normalizedQuery.split(' ').filter(Boolean);
-  var nameWords = name.split(' ').filter(Boolean);
-  var score = 0;
+  terms = {
+    name: name, barcode: barcode, haystack: haystack,
+    compactBarcode: barcode.replace(/\s+/g, ''), compactName: name.replace(/\s+/g, ''),
+    compactHaystack: haystack.replace(/\s+/g, ''), nameWords: name.split(' ').filter(Boolean)
+  };
+  productSearchTerms.set(product, terms);
+  return terms;
+}
 
-  if (barcode && compactSearchText(barcode) === compactQuery) score = 1200;
+function scoreProductSearch(product, query, allowFuzzy) {
+  var prepared = typeof query === 'string' ? prepareSearchQuery(query) : query;
+  var normalizedQuery = prepared.normalized;
+  if (!normalizedQuery) return { score: 1, fuzzy: false };
+  var terms = getProductSearchTerms(product);
+  var name = terms.name, haystack = terms.haystack;
+  var compactQuery = prepared.compact, compactName = terms.compactName;
+  var queryTokens = prepared.tokens, nameWords = terms.nameWords;
+  var score = 0;
+  if (terms.barcode && terms.compactBarcode === compactQuery) score = 1200;
   if (name === normalizedQuery) score = Math.max(score, 1100);
   if (compactName === compactQuery) score = Math.max(score, 1080);
   if (name.startsWith(normalizedQuery)) score = Math.max(score, 950);
-  if (nameWords.indexOf(normalizedQuery) !== -1) score = Math.max(score, 930);
+  if (nameWords.includes(normalizedQuery)) score = Math.max(score, 930);
   if (name.includes(normalizedQuery)) score = Math.max(score, 880);
   if (compactName.includes(compactQuery)) score = Math.max(score, 850);
-
   var everyTokenMatches = queryTokens.every(function(token) {
-    return haystack.includes(token) || compactHaystack.includes(compactSearchText(token));
+    return haystack.includes(token) || terms.compactHaystack.includes(token);
   });
   if (everyTokenMatches) {
-    var nameTokenHits = queryTokens.filter(function(token) {
-      return name.includes(token) || compactName.includes(compactSearchText(token));
-    }).length;
-    score = Math.max(score, 700 + (nameTokenHits * 25) - Math.min(80, name.length - normalizedQuery.length));
+    var nameTokenHits = queryTokens.filter(function(token) { return name.includes(token) || compactName.includes(token); }).length;
+    score = Math.max(score, 700 + nameTokenHits * 25 - Math.min(80, name.length - normalizedQuery.length));
   }
-
   if (score > 0) return { score: score, fuzzy: false };
-  if (normalizedQuery.length < 4) return { score: 0, fuzzy: false };
-
-  var wholeScore = Math.max(similarity(normalizedQuery, name), similarity(compactQuery, compactName));
+  if (allowFuzzy === false || normalizedQuery.length < 4) return { score: 0, fuzzy: false };
+  var wholeScore = Math.max(normalizedSimilarity(normalizedQuery, name), normalizedSimilarity(compactQuery, compactName));
   var tokenScores = queryTokens.map(function(token) {
-    return Math.max.apply(null, nameWords.map(function(word) {
-      return Math.max(similarity(token, word), similarity(compactSearchText(token), compactSearchText(word)));
-    }).concat([0]));
+    return nameWords.reduce(function(best, word) { return Math.max(best, normalizedSimilarity(token, word)); }, 0);
   });
-  var tokenAverage = tokenScores.length
-    ? tokenScores.reduce(function(total, value){ return total + value; }, 0) / tokenScores.length
-    : 0;
+  var tokenAverage = tokenScores.length ? tokenScores.reduce(function(total, value) { return total + value; }, 0) / tokenScores.length : 0;
   var weakestToken = tokenScores.length ? Math.min.apply(null, tokenScores) : 0;
   var fuzzyScore = Math.max(wholeScore, tokenAverage);
-
   if (fuzzyScore >= .56 && (queryTokens.length === 1 || weakestToken >= .42)) {
     return { score: 300 + Math.round(fuzzyScore * 100), fuzzy: true };
   }
@@ -578,18 +625,16 @@ function isProductRecord(product) {
 
 async function fetchSheet(cfg) {
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-    '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(cfg.name);
+    '/gviz/tq?tqx=out:json&headers=2&range=' + (cfg.name === 'Trafimet' ? 'A:D' : 'A:E') + '&sheet=' + encodeURIComponent(cfg.name);
   try {
-    const response = await fetchWithTimeout(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const text = await response.text();
+    const text = await fetchWithTimeout(url, { cache: 'no-store' });
     const match = text.match(/setResponse\(([\s\S]*?)\);/);
     if (!match) throw new Error('Geçersiz Google Sheets yanıtı');
     const data = JSON.parse(match[1]);
     if (data.status !== 'ok' || !data.table || !Array.isArray(data.table.rows)) {
       throw new Error('Google Sheets verisi alınamadı');
     }
-    return data.table.rows
+    var records = data.table.rows
       .filter(function(row) { return row.c && row.c[cfg.n] && row.c[cfg.n].v; })
       .map(function(row) {
         var cells = row.c;
@@ -597,12 +642,15 @@ async function fetchSheet(cfg) {
         return {
           barcode: barcodeValue === null || barcodeValue === undefined ? '' : String(barcodeValue).trim(),
           name: String(cells[cfg.n].v || ''),
-          price: cells[cfg.p] ? cells[cfg.p].v : null,
+          price: cells[cfg.p] ? priceNumber(cells[cfg.p].v) : null,
+          priceIssue: cataloguePriceIssue(cells, cfg),
           updated: cfg.u !== null && cells[cfg.u] ? cells[cfg.u].v : null,
           stock: cfg.s !== null && cells[cfg.s] && cells[cfg.s].v != null && cells[cfg.s].v !== '' && isFinite(Number(cells[cfg.s].v)) ? Number(cells[cfg.s].v) : null,
           sheet: cfg.name
         };
       }).filter(isProductRecord);
+    if (!records.length && cfg.name !== 'Envanter') throw new Error('Ürün listesi boş; önceki kayıtlar korunacak');
+    return uniqueProductRecords(records);
   } catch (error) {
     console.warn(cfg.name + ' yüklenemedi:', error);
     return null;
@@ -641,7 +689,12 @@ function readProductSnapshot() {
         !isFinite(syncedAtMs)) {
       return null;
     }
-    snapshot.products = snapshot.products.filter(isProductRecord);
+    snapshot.products = uniqueProductRecords(snapshot.products);
+    snapshot.products.forEach(function(product) {
+      if (!Object.prototype.hasOwnProperty.call(product, 'priceIssue')) {
+        product.priceIssue = 'Önceki sürümün fiyat kaydı. Kur kontrolü için veriyi çevrimiçi yenileyin.';
+      }
+    });
     return snapshot.products.length ? snapshot : null;
   } catch (e) {
     return null;
@@ -657,7 +710,8 @@ function writeProductSnapshot(snapshot) {
 }
 
 function applyProductSnapshot(snapshot, cached) {
-  products = snapshot.products.filter(isProductRecord);
+  var selectedKey = productKey(currentProduct);
+  products = uniqueProductRecords(snapshot.products);
   migrateProductReferences();
   if (!cached) applyPriceChanges();
   else products.forEach(function(product) { delete product.previousPrice; delete product.priceChange; });
@@ -668,10 +722,11 @@ function applyProductSnapshot(snapshot, cached) {
   renderQuickLists();
   updateOverviewStats();
   setLastSync(snapshot.syncedAt, cached);
-  search(document.getElementById('searchInput').value);
+  search(document.getElementById('searchInput').value, selectedKey);
   document.getElementById('infoBox').textContent = products.length + ' ürün ' +
     (cached ? 'hazır. Güncel veri arka planda kontrol ediliyor…' : 'senkronize edildi.') +
-    (snapshot.failedCount ? ' ' + snapshot.failedCount + ' sayfa yüklenemedi.' : '');
+    (snapshot.failedCount ? ' ' + snapshot.failedCount + ' sayfa yüklenemedi.' : '') +
+    (products.some(function(product) { return product.priceIssue; }) ? ' Fiyat kontrolü gereken kayıtlar var; gelişmiş filtrelerden “Fiyat kontrolü gerekli” seçin.' : '');
 }
 
 async function loadData(manual) {
@@ -712,14 +767,16 @@ async function loadData(manual) {
     }
     if (manual) showToast(failedCount ? 'Güncelleme kısmen tamamlandı.' : 'Ürün verileri yenilendi.');
   } catch(e) {
-    if (cachedSnapshot) {
+    if (products.length) {
+      document.getElementById('infoBox').textContent = 'Güncel veri alınamadı. Açık sayfadaki önceki kayıtlar korunuyor; fiyatları doğrulayın.';
+      document.getElementById('lastSyncText').textContent = document.getElementById('lastSyncText').textContent.replace(/ · Yenileme başarısız$/, '') + ' · Yenileme başarısız';
+      if (manual) showToast('Güncelleme tamamlanamadı; açık sayfadaki veriler korundu.');
+    } else if (cachedSnapshot) {
       applyProductSnapshot(cachedSnapshot, true);
       document.getElementById('infoBox').textContent =
         cachedSnapshot.products.length + ' ürün hızlı önbellekten gösteriliyor. Güncel veri alınamadı.';
       showToast('Güncelleme tamamlanamadı; son başarılı veriler gösteriliyor.');
-    } else if (products.length) {
-      document.getElementById('infoBox').textContent = 'Güncel veri alınamadı. Açık sayfadaki önceki kayıtlar korunuyor.';
-      setLastSync('', false);
+
     } else {
       products = [];
       populateCategories();
@@ -884,10 +941,10 @@ function formatDate(val) {
 }
 
 function formatPrice(val) {
-  if (val == null) return '—';
-  var n = Number(val);
-  if (isNaN(n)) return String(val);
-  return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ₺';
+  var number = priceNumber(val);
+  return number === null ? '—' : number.toLocaleString('tr-TR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  }) + ' ₺';
 }
 
 function escapeHtml(val) {
@@ -909,7 +966,7 @@ function getStockInfo(product) {
   return { text: 'Stokta · ' + stock, color: '#14764f' };
 }
 
-function showResult(found) {
+function showResult(found, quiet) {
   var nameEl   = document.getElementById('resName');
   var priceEl  = document.getElementById('resPrice');
   var statusEl = document.getElementById('resStatus');
@@ -939,15 +996,19 @@ function showResult(found) {
       Number(found.stock) <= 0 ? 'meta-chip--danger' :
       Number(found.stock) <= 5 ? 'meta-chip--warning' : 'meta-chip--ok'
     );
-    addBtn.disabled      = false;
+    addBtn.disabled = !hasUsablePrice(found);
+    var dataWarning = document.getElementById('resDataWarning');
+    dataWarning.hidden = hasUsablePrice(found);
+    dataWarning.textContent = found.priceIssue || 'Bu ürünün geçerli fiyatı bulunamadı. Sepete eklemeden önce fiyatı doğrulayın.';
     detailBtn.disabled   = false;
     currentProduct       = found;
     var changeText = getPriceChangeText(found);
-    priceBadge.textContent = changeText === 'Değişiklik yok' ? 'GÜNCEL KAYIT' : changeText;
+    priceBadge.textContent = !hasUsablePrice(found) ? 'FİYAT KONTROLÜ GEREKLİ' : (changeText === 'Değişiklik yok' ? 'SHEET KAYDI' : changeText);
     priceBadge.className = found.priceChange > 0 ? 'up' : (found.priceChange < 0 ? 'down' : '');
     var isFavorite = favorites.includes(productKey(found));
     favoriteBtn.classList.toggle('active', isFavorite);
     favoriteBtn.textContent = isFavorite ? '★' : '☆';
+    if (!quiet) {
     document.querySelector('.result-panel').classList.remove('pulse-result');
     requestAnimationFrame(function(){
       var panel = document.querySelector('.result-panel');
@@ -958,6 +1019,7 @@ function showResult(found) {
         panel.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
       }
     });
+    }
   } else {
     nameEl.textContent   = 'Bulunamadı';
     priceEl.textContent  = '—';
@@ -973,9 +1035,10 @@ function showResult(found) {
     favoriteBtn.textContent = '☆';
     addBtn.disabled      = true;
     detailBtn.disabled   = true;
-    priceBadge.textContent = 'GÜNCEL KAYIT';
+    priceBadge.textContent = 'SHEET KAYDI';
     priceBadge.className = '';
     currentProduct       = null;
+    document.getElementById('resDataWarning').hidden = true;
   }
 }
 
@@ -1118,7 +1181,7 @@ function money(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
-function search(q) {
+function search(q, preferredKey, exactBarcodeOnly) {
   q = q.trim();
   var sugEl = document.getElementById('suggestions');
   var filtersActive = document.getElementById('categoryFilter').value ||
@@ -1142,9 +1205,10 @@ function search(q) {
     document.getElementById('favoriteBtn').textContent = '☆';
     document.getElementById('addBtn').disabled       = true;
     document.getElementById('detailBtn').disabled    = true;
-    document.getElementById('priceChangeBadge').textContent = 'GÜNCEL KAYIT';
+    document.getElementById('priceChangeBadge').textContent = 'SHEET KAYDI';
     document.getElementById('priceChangeBadge').className = '';
     currentProduct = null;
+    document.getElementById('resDataWarning').hidden = true;
     while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild);
     return;
   }
@@ -1159,25 +1223,32 @@ function search(q) {
   var pool = products.filter(function(p) {
     if (category && p.sheet !== category) return false;
     if (brand && getBrand(p) !== brand) return false;
-    var stockKnown = p.stock !== null && p.stock !== undefined && !isNaN(Number(p.stock));
+    var stockKnown = p.stock != null && p.stock !== '' && Number.isFinite(Number(p.stock));
     if (stockMode === 'available' && (!stockKnown || Number(p.stock) <= 0)) return false;
     if (stockMode === 'critical' && (!stockKnown || Number(p.stock) < 0 || Number(p.stock) > 5)) return false;
     if (stockMode === 'out' && (!stockKnown || Number(p.stock) > 0)) return false;
     if (stockMode === 'priced' && stockKnown) return false;
+    if (stockMode === 'price-review' && hasUsablePrice(p)) return false;
     var price = Number(p.price);
-    if (hasMin && (isNaN(price) || price < minPrice)) return false;
-    if (hasMax && (isNaN(price) || price > maxPrice)) return false;
+    if ((hasMin || hasMax) && !hasUsablePrice(p)) return false;
+    if (hasMin && price < minPrice) return false;
+    if (hasMax && price > maxPrice) return false;
     return true;
   });
   var exact = q ? pool.find(function(p){ return p.barcode === q; }) : null;
   if (exact) { showResult(exact); addRecentProduct(exact); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
-  var scoredMatches = pool.map(function(product) {
-    var result = scoreProductSearch(product, q);
-    return { product: product, score: result.score, fuzzy: result.fuzzy };
-  }).filter(function(item) {
-    return item.score > 0;
-  }).sort(function(a, b) {
+  if (exactBarcodeOnly) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
+  var preparedQuery = prepareSearchQuery(q);
+  function scorePool(allowFuzzy) {
+    return pool.map(function(product) {
+      var result = scoreProductSearch(product, preparedQuery, allowFuzzy);
+      return { product: product, score: result.score, fuzzy: result.fuzzy };
+    }).filter(function(item) { return item.score > 0; });
+  }
+  var scoredMatches = scorePool(false);
+  if (!scoredMatches.length) scoredMatches = scorePool(true);
+  scoredMatches.sort(function(a, b) {
     if (b.score !== a.score) return b.score - a.score;
     return String(a.product.name).localeCompare(String(b.product.name), 'tr-TR');
   });
@@ -1188,7 +1259,8 @@ function search(q) {
 
   if (matches.length === 0) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
-  showResult(matches[0]);
+  var selected = preferredKey && matches.find(function(product) { return productKey(product) === preferredKey; });
+  showResult(selected || matches[0], true);
   if (matches.length === 1) { while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
   while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild);
@@ -1223,6 +1295,7 @@ function clearAdvancedFilters() {
 
 function addToBasket() {
   if (!isProductRecord(currentProduct)) return;
+  if (!hasUsablePrice(currentProduct)) { showToast('Ürünün fiyatını doğrulamadan sepete ekleyemezsiniz.'); return; }
   var qtyEl = document.getElementById('qtyInput');
   var qty = parseInt(qtyEl.value, 10);
   if (!Number.isInteger(qty) || qty < 1) qty = 1;
@@ -1281,7 +1354,7 @@ function getBasketPriceChanges() {
   var latest = new Map(products.map(function(product) { return [productKey(product), product]; }));
   return basket.map(function(item, index) {
     var product = latest.get(productKey(item));
-    var valid = product && product.price != null && product.price !== '' && isFinite(Number(product.price)) && Number(product.price) >= 0;
+    var valid = hasUsablePrice(product);
     if (!valid) return { index: index, unavailable: true };
     if (item.price == null || item.price === '' || !isFinite(Number(item.price)) || money(item.price) !== money(product.price)) {
       return { index: index, price: Number(product.price) };
@@ -1293,14 +1366,16 @@ function getBasketPriceChanges() {
 function renderBasketPriceWarning() {
   var warning = document.getElementById('basketPriceWarning');
   if (!warning) return;
+  var invalidCount = basket.filter(function(item) { return !hasUsablePrice(item); }).length;
   var changes = products.length ? getBasketPriceChanges() : [];
   var changed = changes.filter(function(change) { return !change.unavailable; }).length;
   var missing = changes.length - changed;
-  warning.hidden = !changes.length;
+  warning.hidden = !changes.length && !invalidCount;
   document.getElementById('updateBasketPricesBtn').hidden = !changed;
   document.getElementById('basketPriceWarningText').textContent =
     (changed ? changed + ' ürünün fiyatı son yüklenen listeye göre değişti. Sepet mevcut fiyatlarını koruyor. ' : '') +
-    (missing ? missing + ' ürünün güncel fiyatı bulunamadı; bu ürünler güncellenmeyecek.' : '');
+    (missing ? missing + ' ürünün güncel fiyatı doğrulanamadı; bu ürünler güncellenmeyecek. ' : '') +
+    (invalidCount ? invalidCount + ' sepet satırında geçerli fiyat yok. Teklif oluşturmak için bu satırları güncelleyin veya çıkarın.' : '');
 }
 
 function updateBasketPrices() {
@@ -1331,7 +1406,6 @@ function renderBasket() {
     updateMobileBasketSummary();
     return;
   }
-  var total = 0;
   var table = document.createElement('table'); table.className = 'basket-tbl';
   var thead = document.createElement('thead');
   var trHead = document.createElement('tr');
@@ -1340,8 +1414,7 @@ function renderBasket() {
   table.appendChild(thead);
   var tbody = document.createElement('tbody');
   basket.forEach(function(item, idx){
-    var sub = item.price != null ? money(money(item.price) * item.qty) : 0;
-    total += sub;
+    var sub = hasUsablePrice(item) ? money(money(item.price) * item.qty) : null;
     var tr = document.createElement('tr'); tr.className = 'item-row';
     var tdName = document.createElement('td'); tdName.textContent = item.name;
     var productCode = document.createElement('small');
@@ -1355,7 +1428,7 @@ function renderBasket() {
     var btnInc = document.createElement('button'); btnInc.setAttribute('data-action','changeBasketQty'); btnInc.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx, 1]))); btnInc.setAttribute('aria-label','Adedi artır'); btnInc.textContent = '+';
     spanQty.appendChild(btnDec); spanQty.appendChild(strong); spanQty.appendChild(btnInc);
     tdQty.appendChild(spanQty);
-    var tdTotal = document.createElement('td'); tdTotal.textContent = item.price != null ? formatPrice(sub) : '—';
+    var tdTotal = document.createElement('td'); tdTotal.textContent = formatPrice(sub);
     var tdDel = document.createElement('td'); var delBtn = document.createElement('button'); delBtn.className = 'del-btn'; delBtn.setAttribute('data-action','removeFromBasket'); delBtn.setAttribute('data-args', encodeURIComponent(JSON.stringify([idx]))); delBtn.textContent = '✕'; tdDel.appendChild(delBtn);
     tr.appendChild(tdName); tr.appendChild(tdPrice); tr.appendChild(tdQty); tr.appendChild(tdTotal); tr.appendChild(tdDel);
     tbody.appendChild(tr);
@@ -1387,13 +1460,23 @@ function renderBasket() {
 }
 
 function getBasketTotals() {
-  var total = basket.reduce(function(sum, item) {
-    return sum + money(money(Number(item.price) || 0) * (Number(item.qty) || 0));
-  }, 0);
-  total = money(total);
+  var complete = basket.every(hasUsablePrice);
+  if (!complete) return { complete: false, total: null, discount: null, discounted: null, vatIncluded: null };
+  var total = money(basket.reduce(function(sum, item) {
+    return sum + money(money(item.price) * item.qty);
+  }, 0));
   var discount = money(total * (iskontoOrani / 100));
   var discounted = money(total - discount);
-  return { total: total, discount: discount, discounted: discounted, vatIncluded: money(discounted * 1.20) };
+  return { complete: true, total: total, discount: discount, discounted: discounted, vatIncluded: money(discounted * 1.20) };
+}
+
+function canCreateOffer() {
+  if (!basket.length) { showToast('Teklif için sepete ürün ekleyin.'); return false; }
+  if (!getBasketTotals().complete) {
+    showToast('Sepette fiyatı doğrulanamayan ürün var. Fiyatları güncelleyin veya bu ürünleri çıkarın.');
+    return false;
+  }
+  return true;
 }
 
 function updateMobileBasketSummary() {
@@ -1402,7 +1485,7 @@ function updateMobileBasketSummary() {
   var count = basket.reduce(function(sum, item){ return sum + (Number(item.qty) || 0); }, 0);
   var totals = getBasketTotals();
   document.getElementById('mobileBasketItems').textContent = count + ' ürün';
-  document.getElementById('mobileBasketTotal').textContent = formatPrice(totals.vatIncluded);
+  document.getElementById('mobileBasketTotal').textContent = totals.complete ? formatPrice(totals.vatIncluded) : 'Fiyat eksik';
   summary.classList.toggle('visible', count > 0 && document.getElementById('tab-sepet').style.display === 'none');
 }
 
@@ -1481,7 +1564,7 @@ function downloadCsv(filename, rows) {
 }
 
 function exportBasketCsv() {
-  if (!basket.length) { showToast('Aktarmak için sepete ürün ekleyin.'); return; }
+  if (!canCreateOffer()) return;
   var totals = getBasketTotals();
   var rows = [['Ürün', 'Kategori', 'Birim fiyat', 'Adet', 'Toplam']];
   basket.forEach(function(item) {
@@ -1542,6 +1625,7 @@ function applyCustomerProfile() {
 }
 
 function buildOfferText() {
+  if (!canCreateOffer()) return '';
   ensureOfferNumber();
   var customer = document.getElementById('customerName').value.trim() || 'Değerli Müşterimiz';
   var validity = document.getElementById('offerValidity').value;
@@ -1567,7 +1651,7 @@ function buildOfferText() {
 }
 
 function saveOfferHistory() {
-  if (!basket.length) { showToast('Kaydetmek için sepete ürün ekleyin.'); return; }
+  if (!canCreateOffer()) return;
   ensureOfferNumber();
   var customer = document.getElementById('customerName').value.trim() || 'Müşteri belirtilmedi';
   var record = {
@@ -1620,7 +1704,7 @@ function deleteOfferHistory(encodedId) {
 }
 
 function openOfferModal() {
-  if (!basket.length) { showToast('Teklif oluşturmak için sepete ürün ekleyin.'); return; }
+  if (!canCreateOffer()) return;
   ensureOfferNumber();
   var validity = new Date();
   validity.setDate(validity.getDate() + 7);
@@ -1647,7 +1731,8 @@ function updateOfferSummary() {
 }
 
 function copyOffer() {
-  copyText(buildOfferText(), 'Teklif metni kopyalandı.');
+  var text = buildOfferText();
+  if (text) copyText(text, 'Teklif metni kopyalandı.');
 }
 
 function copyText(text, successMessage) {
@@ -1678,11 +1763,12 @@ function copyTextFallback(text, successMessage) {
 }
 
 function shareOffer() {
-  window.open('https://wa.me/?text=' + encodeURIComponent(buildOfferText()), '_blank', 'noopener');
+  var text = buildOfferText();
+  if (text) window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
 }
 
 function printOffer() {
-  if (!basket.length) { showToast('PDF için sepete ürün ekleyin.'); return; }
+  if (!canCreateOffer()) return;
   var text = escapeHtml(buildOfferText()).replace(/\n/g, '<br>');
   var win = null;
   var objectUrl = null;
@@ -1833,12 +1919,16 @@ document.addEventListener('keydown', function(e) {
 });
 
 var reader = null;
+var scanSession = 0;
 document.getElementById('scanBtn').addEventListener('click', async function() {
   var scanButton = this;
   scanButton.disabled = true;
+  var session = ++scanSession;
+  var activeReader = null;
   try {
     if (!window.ZXing) showToast('Barkod okuyucu hazırlanıyor...');
     await loadBarcodeLibrary();
+    if (session !== scanSession || document.hidden) return;
     var overlay = document.getElementById('overlay');
     overlay.classList.add('active');
     overlay.setAttribute('aria-hidden', 'false');
@@ -1851,23 +1941,26 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
       ZXing.BarcodeFormat.CODABAR,ZXing.BarcodeFormat.DATA_MATRIX
     ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    reader = new ZXing.BrowserMultiFormatReader(hints);
-    await reader.decodeFromConstraints(
+    activeReader = new ZXing.BrowserMultiFormatReader(hints);
+    reader = activeReader;
+    await activeReader.decodeFromConstraints(
       { audio: false, video: { facingMode: 'environment', width:{ideal:1920}, height:{ideal:1080} } },
       'video',
       function(result) {
-        if (result) {
+        if (result && session === scanSession) {
           var val = result.getText().trim();
           document.getElementById('searchInput').value = val;
       document.getElementById('mobileSearchInput').value = val;
-          search(val);
+          search(val, null, true);
           if (navigator.vibrate) navigator.vibrate(90);
-          showToast('Barkod okundu.');
+          showToast(currentProduct ? 'Barkod okundu.' : 'Okutulan barkod ürün listesinde bulunamadı.');
           stopCam();
         }
       }
     );
+    if (session !== scanSession) activeReader.reset();
   } catch(e) {
+    if (session !== scanSession) return;
     showToast('Kamera açılamadı: ' + e.message);
     stopCam();
   } finally {
@@ -1918,12 +2011,15 @@ document.getElementById('scanBtn').addEventListener('click', async function() {
 })();
 
 function stopCam() {
+  scanSession++;
   if (reader) { reader.reset(); reader = null; }
   var overlay = document.getElementById('overlay');
   overlay.classList.remove('active');
   overlay.setAttribute('aria-hidden', 'true');
 }
 document.getElementById('closeBtn').addEventListener('click', stopCam);
+document.addEventListener('visibilitychange', function() { if (document.hidden) stopCam(); });
+window.addEventListener('pagehide', stopCam);
 
 function updateConnectionState() {
   var pill = document.querySelector('.sync-pill');
@@ -1947,7 +2043,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.35').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.36').catch(function(){}); });
 }
 
 updateConnectionState();

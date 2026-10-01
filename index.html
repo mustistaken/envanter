@@ -7,7 +7,7 @@
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://docs.google.com">
-<link rel="stylesheet" href="styles.css?v=14.35">
+<link rel="stylesheet" href="styles.css?v=14.36">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -120,6 +120,7 @@
               <option value="critical">Kritik stok</option>
               <option value="out">Tükenenler</option>
               <option value="priced">Fiyat listesi</option>
+              <option value="price-review">Fiyat kontrolü gerekli</option>
             </select>
             <input type="number" id="minPriceFilter" min="0" placeholder="Min. fiyat" aria-label="Minimum fiyat">
             <input type="number" id="maxPriceFilter" min="0" placeholder="Maks. fiyat" aria-label="Maksimum fiyat">
@@ -155,7 +156,7 @@
       <section class="result-panel" aria-label="Ürün sonucu">
         <div class="result-panel__head">
           <strong>Ürün sonucu</strong>
-          <span id="priceChangeBadge">GÜNCEL KAYIT</span>
+          <span id="priceChangeBadge">SHEET KAYDI</span>
         </div>
         <table class="res-table">
           <thead><tr><th>ÜRÜN ADI</th><th>FİYAT</th><th>DURUM</th></tr></thead>
@@ -169,6 +170,7 @@
           <div class="update-label">SON GÜNCELLEME</div>
           <div class="update-val" id="resDate">—</div>
         </div>
+        <p class="product-data-warning" id="resDataWarning" role="status" hidden></p>
         <div class="result-meta" id="resultMeta" aria-live="polite">
           <span class="meta-chip" id="resultBrandChip">Marka bekleniyor</span>
           <span class="meta-chip" id="resultCategoryChip">Kategori bekleniyor</span>
@@ -349,7 +351,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=14.35"></script>
+<script src="app.js?v=14.36"></script>
 </body>
 </html>
 

@@ -17,7 +17,9 @@ function harness() {
   let now = 1_000_000;
   const makeElement = () => ({
     value: '', textContent: '', children: [],
-    classList: { add() {}, remove() {} },
+    classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
+    setAttribute() {},
+    style: {},
     get firstChild() { return this.children[0]; },
     appendChild(child) { this.children.push(child); },
     removeChild(child) { this.children.splice(this.children.indexOf(child), 1); }
@@ -90,6 +92,15 @@ test('cached headers are removed and a cache containing only headings is not use
   assert.equal(context.readProductSnapshot().products.length, 1);
   write([heading]);
   assert.equal(context.readProductSnapshot(), null);
+});
+
+test('older cache records require a live currency check; verified cache remains usable offline', () => {
+  const {context,storage}=harness();
+  function save(item) { storage.set('teknikelProductSnapshot',JSON.stringify({products:[item],syncedAt:'2026-10-01T15:00:00Z'})); }
+  save(product());
+  assert.equal(context.hasUsablePrice(context.readProductSnapshot().products[0]),false);
+  save(product({priceIssue:''}));
+  assert.equal(context.hasUsablePrice(context.readProductSnapshot().products[0]),true);
 });
 
 test('a heading cannot be added to the basket even if it was previously selected', () => {
@@ -219,7 +230,7 @@ test('basket prices remain fixed until explicit update and missing products are 
   assert.equal(vm.runInContext('basket[0].price', context), 90);
   assert.equal(elements.get('basketPriceWarning').hidden, false);
   assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün fiyatı/);
-  assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün güncel fiyatı bulunamadı/);
+  assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün güncel fiyatı doğrulanamadı/);
   context.renderBasket = () => context.renderBasketPriceWarning();
   context.updateBadge = () => {};
   context.showToast = () => {};
@@ -238,4 +249,116 @@ test('basket comparison uses billed cents and supports zero-price changes', () =
   assert.equal(context.getBasketPriceChanges().length, 0);
   vm.runInContext('products[0].price = 0', context);
   assert.equal(context.getBasketPriceChanges()[0].price, 0);
+});
+
+test('invalid prices cannot be added, quoted or exported as zero, while a real zero remains valid', () => {
+  const { context } = harness();
+  const messages = [];
+  context.showToast = text => messages.push(text);
+  for (const price of [null, '', ' ', 'hata', -1, Infinity, true]) {
+    vm.runInContext('currentProduct = ' + JSON.stringify(product()) + '; currentProduct.price = undefined;', context);
+    context.currentProductPrice = price;
+    vm.runInContext('currentProduct.price = currentProductPrice', context);
+    context.addToBasket();
+    assert.equal(vm.runInContext('basket.length', context), 0);
+  }
+  vm.runInContext('basket = ' + JSON.stringify([product({price:null,qty:1})]), context);
+  assert.equal(context.getBasketTotals().complete, false);
+  assert.equal(context.getBasketTotals().vatIncluded, null);
+  assert.equal(context.buildOfferText(), '');
+  let exports = 0;
+  context.downloadCsv = () => exports++;
+  context.window.open = () => exports++;
+  context.copyText = () => exports++;
+  context.copyOffer(); context.shareOffer(); context.printOffer(); context.exportBasketCsv(); context.saveOfferHistory();
+  assert.equal(exports, 0);
+  assert.equal(vm.runInContext('offerHistory.length', context), 0);
+  vm.runInContext('basket[0].price = 0', context);
+  assert.equal(context.getBasketTotals().complete, true);
+  assert.equal(context.getBasketTotals().vatIncluded, 0);
+  assert.ok(messages.length > 0);
+});
+
+test('currency labels inconsistent with TL prices are flagged without guessing a replacement price', async () => {
+  const {context} = harness();
+  const rows = [
+    [{v:'USD-OLD'}, {v:'Eski USD'}, null, {v:10, f:'10,00 $'}, {v:10}],
+    [{v:'TL-WRONG'}, {v:'TL ürün'}, null, {v:1820, f:'1.820,00 ₺'}, {v:89241.88}],
+    [{v:'USD-OK'}, {v:'USD ürün'}, null, {v:10, f:'$10,00'}, {v:490.34}]
+  ];
+  context.fetch = async () => ({ok:true,text:async()=> 'setResponse(' + JSON.stringify({status:'ok', table:{rows:rows.map(c=>({c}))}}) + ');'});
+  const result = await context.fetchSheet({name:'Kaynak Tamamlayıcı Ürünler', b:0,n:1,p:4,s:null,u:null});
+  assert.equal(result[0].price,10);
+  assert.equal(context.hasUsablePrice(result[0]),false);
+  assert.equal(context.hasUsablePrice(result[1]),false);
+  assert.equal(context.hasUsablePrice(result[2]),true);
+  assert.match(result[0].priceIssue,/Para birimi/);
+});
+
+test('timeout stays active while a response body is stalled', async () => {
+  const {context} = harness();
+  let expire, started, cleared = false;
+  const bodyStarted = new Promise(resolve => { started = resolve; });
+  context.setTimeout = callback => { expire = callback; return 1; };
+  context.clearTimeout = () => { cleared = true; };
+  context.fetch = async (url, {signal}) => ({ok:true, text:() => { started(); return new Promise((resolve,reject) => signal.addEventListener('abort',()=>reject(new Error('aborted body')))); }});
+  const read = context.fetchWithTimeout('https://docs.google.com/test');
+  await bodyStarted;
+  assert.equal(cleared,false);
+  expire();
+  await assert.rejects(read,/aborted body/);
+  assert.equal(cleared,true);
+});
+
+test('total refresh failure preserves newer in-memory data instead of restoring an older cache', async () => {
+  const {context,storage} = harness();
+  storage.set('teknikelProductSnapshot',JSON.stringify({products:[product({price:90})],syncedAt:'2026-09-30T21:00:00Z'}));
+  vm.runInContext('products = '+JSON.stringify([product({price:110})]),context);
+  context.fetchSheet = async () => null;
+  context.applyProductSnapshot = () => assert.fail('Older cache must not replace current data');
+  context.showToast = () => {};
+  await context.loadData(true);
+  assert.equal(vm.runInContext('products[0].price',context),110);
+  assert.equal(JSON.parse(storage.get('teknikelProductSnapshot')).products[0].price,90);
+});
+
+test('duplicate rows are collapsed while different SKUs and differing prices are preserved', () => {
+  const {context} = harness();
+  const records=[product(), product(), product({barcode:'OTHER'}), product({price:120})];
+  const result=context.uniqueProductRecords(records);
+  assert.equal(result.length,3);
+  assert.equal(result[1].barcode,'OTHER');
+  assert.equal(result[2].price,120);
+});
+
+test('search keeps the selected SKU after refresh and skips fuzzy scoring when direct matches exist', () => {
+  const {context,elements} = harness();
+  const items=[product({barcode:'FIRST',name:'Lava torç'}), product({barcode:'SELECTED',name:'Lava torç'}), product({barcode:'OTHER',name:'Başka ürün'})];
+  vm.runInContext('products = '+JSON.stringify(items),context);
+  const original=context.scoreProductSearch;
+  const fuzzyCalls=[];
+  context.scoreProductSearch=(p,q,allowFuzzy)=> {fuzzyCalls.push(allowFuzzy);return original(p,q,allowFuzzy);};
+  let selected;
+  context.showResult=p=> {selected=p;};
+  context.search('Lava torç',context.productKey(items[1]));
+  assert.equal(selected.barcode,'SELECTED');
+  assert.deepEqual(fuzzyCalls,[false,false,false]);
+  assert.ok(elements.get('suggestions').children.length>0);
+  assert.ok(context.scoreProductSearch(product({name:'Lava torç'}),'lavaaa').score>0);
+});
+
+test('scanner lookup does not select a similar product for an unknown barcode', () => {
+  const {context} = harness();
+  vm.runInContext('products = '+JSON.stringify([product({name:'Lava torç',barcode:'LAVA-01'})]),context);
+  let selected='not called';
+  context.showResult=p=> {selected=p;};
+  context.search('lavaaa',null,true);
+  assert.equal(selected,null);
+});
+
+test('empty catalogues are failed reads, while an empty stock inventory is valid', async () => {
+  const {context}=harness();
+  context.fetch=async()=>gviz([]);
+  assert.equal(await context.fetchSheet({name:'Trafimet',b:0,n:1,p:3,s:null,u:null}),null);
+  assert.equal((await context.fetchSheet({name:'Envanter',b:0,n:1,p:2,s:3,u:4})).length,0);
 });

@@ -1,5 +1,22 @@
 # Teknikel
 
+## 14.36
+
+- Fiyatı eksik, geçersiz veya para birimiyle TL hesabı uyumsuz ürünlerde sepete ekleme kapalıdır. Eski sepette eksik fiyat varsa toplam hesaplanmaz; teklif, PDF, paylaşım ve Excel aktarımı geçerli fiyat bekler. Gerçek sıfır fiyat korunur.
+- “Fiyat kontrolü gerekli” filtresi inceleme isteyen ürünleri gösterir. Üretici listesinde bulunamayan eski fiyatlar tahminle değiştirilmez.
+- Arama için ürün metinleri bir kez hazırlanır; benzerlik hesabı yalnızca doğrudan eşleşme olmadığında yapılır. Arka plan yenilemesi aynı adlı ürünlerde seçilen ürün kodunu korur. Aynı ürünün birebir tekrarları listede birleştirilir.
+- Tüm veri istekleri başarısız olduğunda daha yeni açık sayfa verisi eski önbellekle değiştirilmez. Zaman aşımı yanıt gövdesi indirilirken de geçerlidir.
+- Sürümü aynı JS/CSS ve görseller cihazdaki önbellekten açılır. HTML kontrolü 8 saniyede sonlanır; sunucu hatasında kayıtlı uygulama açılır. Farklı JS/CSS sürümleri çevrimdışıyken birbirinin yerine kullanılmaz.
+- Tanınmayan kamera barkodu benzer ürünü seçmez; kamera sayfadan ayrılırken kapatılır. Gerçek kamera/iOS testi ayrıca gerekir.
+- Testler: `node --test scripts/*.test.cjs`.
+
+### Bağlı Apps Script
+
+- Geçmiş tablosundaki türü belirtilmiş tarih sütununa sayı biçimi uygulanması kaldırıldı; manuel çalıştırma doğrulandı.
+- Günlük fiyat güncellemesi, üreticide bulunan ürünlerin TL formülünü kaynak para birimiyle karşılaştırır. Basit kaynak/kur formülleri düzeltilir; özel formüller kontrol için kaydedilir.
+- Kategori başlıkları eksik ürün sayılmaz. Üreticide bulunamayan SKU’lar önceki fiyatları korunarak geçmişe ürün koduyla yazılır.
+- Kaynak okuma, kategori sayısı ve çelişen ürün kodu denetimleri; kilit ve günlük tetikleyici korunur. Sonraki zamanlanmış çalışmanın sonucu ayrıca kontrol edilmelidir.
+
 ## 14.35
 
 - Kur göstergesi, ürün fiyatlarını hesaplayan Google Sheets kurlarını `Kurlar!A1:B3` üzerinden okur. Eski Frankfurter önbelleği kullanılmaz; bağlantı koparsa son Sheet kaydı açıkça belirtilir.
