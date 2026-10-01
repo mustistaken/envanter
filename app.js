@@ -924,9 +924,9 @@ function applyPriceChanges() {
     delete product.priceChange;
     if (product.price != null && product.price !== '' && !isNaN(price) && isFinite(price)) {
       next[key] = price;
-      if (Object.prototype.hasOwnProperty.call(previous, key) && Number(previous[key]) !== price) {
+      if (Object.prototype.hasOwnProperty.call(previous, key) && money(previous[key]) !== money(price)) {
         product.previousPrice = Number(previous[key]);
-        product.priceChange = price - Number(previous[key]);
+        product.priceChange = money(money(price) - money(previous[key]));
       }
     }
   });
@@ -934,7 +934,7 @@ function applyPriceChanges() {
 }
 
 function getPriceChangeText(product) {
-  if (!product || !Number(product.priceChange)) return 'Değişiklik yok';
+  if (!product || !money(Number(product.priceChange) || 0)) return 'Değişiklik yok';
   var direction = product.priceChange > 0 ? 'Yükseldi' : 'Düştü';
   return direction + ' · ' + formatPrice(Math.abs(product.priceChange)) +
     ' (önceki ' + formatPrice(product.previousPrice) + ')';

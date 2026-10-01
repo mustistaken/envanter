@@ -466,3 +466,17 @@ test('offers and CSV use known price units and do not invent a unit for Sheet-on
   assert.equal(exported[1][4],'kg');
   assert.equal(exported[2][4],'');
 });
+
+test('exchange-rate fractions do not create a zero-cent price-change alert',()=>{
+  const {context,storage}=harness();
+  const item=product({price:257.427975});
+  storage.set('teknikelPriceSnapshotV2',JSON.stringify({[context.productKey(item)]:257.43}));
+  vm.runInContext('products='+JSON.stringify([item]),context);
+  context.applyPriceChanges();
+  assert.equal(vm.runInContext('products[0].priceChange',context),undefined);
+  assert.equal(context.getPriceChangeText({priceChange:0.00001,previousPrice:257.43}),'Değişiklik yok');
+  vm.runInContext('products[0].price=257.45',context);
+  context.applyPriceChanges();
+  assert.equal(vm.runInContext('products[0].priceChange',context),0.02);
+  assert.match(context.getPriceChangeText(vm.runInContext('products[0]',context)),/Yükseldi · 0,02 ₺/);
+});

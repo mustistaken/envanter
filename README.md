@@ -1,5 +1,9 @@
 # Teknikel
 
+## 14.39
+
+- Kur çevirisindeki kuruştan küçük farklar “0,00 ₺ fiyat değişti” uyarısı oluşturmaz. Fiyat değişimleri teklif hesabıyla aynı kuruş hassasiyetinde karşılaştırılır.
+
 ## 14.38
 
 - Günlük Apps Script güncellemesi önce üretici kodunu, sonra yalnızca kategori, tam ürün adı, ölçü ve ambalajı tek bir güncel ürüne eşleşen kayıtları kullanır. Benzer model veya farklı ambalaj tahminle eşleştirilmez. Fiziksel barkodlar, favoriler ve sepet kimlikleri korunur.
