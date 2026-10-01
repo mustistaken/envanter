@@ -21,10 +21,7 @@ let storageWriteFailed = false;
 const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
 const NETWORK_TIMEOUT_MS = 12000;
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const EXCHANGE_RATE_URLS = {
-  eur: 'https://api.frankfurter.dev/v2/rate/EUR/TRY',
-  usd: 'https://api.frankfurter.dev/v2/rate/USD/TRY'
-};
+const EXCHANGE_RATE_CACHE_KEY = 'teknikelSheetExchangeRates';
 
 function isLocalDesignPreview() {
   return (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
@@ -253,36 +250,33 @@ function renderExchangeRates(record, cached) {
   document.getElementById('eurTryRate').textContent = formatExchangeRate(record && record.eurTry);
   document.getElementById('usdTryRate').textContent = formatExchangeRate(record && record.usdTry);
   var dateEl = document.getElementById('exchangeRateDate');
-  if (!record || !record.date) {
-    dateEl.textContent = 'Kur alınamadı';
-    return;
-  }
-  var rateDate = new Date(record.date + 'T12:00:00').toLocaleDateString('tr-TR');
-  dateEl.textContent = (cached ? 'Son kayıt · ' : 'Referans · ') + rateDate;
+  dateEl.textContent = record ? (cached ? 'Son kayıt · ' : 'Sheet kuru · ') +
+    new Date(record.savedAt).toLocaleString('tr-TR') : 'Sheet kuru alınamadı';
 }
 
 async function loadExchangeRates() {
-  var cachedRates = readStore('teknikelExchangeRates', null);
-  if (cachedRates) renderExchangeRates(cachedRates, true);
+  var cachedRates = readStore(EXCHANGE_RATE_CACHE_KEY, null);
+  if (cachedRates && (formatExchangeRate(cachedRates.eurTry) === '—' ||
+      formatExchangeRate(cachedRates.usdTry) === '—' || typeof cachedRates.savedAt !== 'number' || !isFinite(cachedRates.savedAt))) cachedRates = null;
+  renderExchangeRates(cachedRates, true);
   try {
-    var responses = await Promise.all([
-      fetchWithTimeout(EXCHANGE_RATE_URLS.eur, { cache: 'no-store' }),
-      fetchWithTimeout(EXCHANGE_RATE_URLS.usd, { cache: 'no-store' })
-    ]);
-    if (!responses[0].ok || !responses[1].ok) throw new Error('Kur servisi yanıt vermedi');
-    var values = await Promise.all(responses.map(function(response){ return response.json(); }));
-    var record = {
-      eurTry: Number(values[0].rate),
-      usdTry: Number(values[1].rate),
-      date: values[0].date || values[1].date || new Date().toISOString().slice(0, 10),
-      savedAt: Date.now()
-    };
-    if (!isFinite(record.eurTry) || !isFinite(record.usdTry) ||
-        record.eurTry <= 0 || record.usdTry <= 0) throw new Error('Kur verisi geçersiz');
-    writeStore('teknikelExchangeRates', record);
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+      '/gviz/tq?tqx=out:json&sheet=Kurlar&range=A1:B3&headers=1';
+    var response = await fetchWithTimeout(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Sheet kuru alınamadı');
+    var match = (await response.text()).match(/setResponse\(([\s\S]*?)\);/);
+    var data = match && JSON.parse(match[1]);
+    if (!data || data.status !== 'ok' || !data.table || !Array.isArray(data.table.rows)) throw new Error('Kur verisi geçersiz');
+    var values = {};
+    data.table.rows.forEach(function(row) {
+      if (row.c && row.c[0] && row.c[1]) values[row.c[0].v] = row.c[1].v;
+    });
+    var record = { eurTry: Number(values.EUR), usdTry: Number(values.USD), savedAt: Date.now() };
+    if (formatExchangeRate(record.eurTry) === '—' || formatExchangeRate(record.usdTry) === '—') throw new Error('Kur verisi geçersiz');
+    writeStore(EXCHANGE_RATE_CACHE_KEY, record);
     renderExchangeRates(record, false);
   } catch (e) {
-    if (!cachedRates) renderExchangeRates(null, false);
+    renderExchangeRates(cachedRates, true);
   }
 }
 
@@ -605,7 +599,7 @@ async function fetchSheet(cfg) {
           name: String(cells[cfg.n].v || ''),
           price: cells[cfg.p] ? cells[cfg.p].v : null,
           updated: cfg.u !== null && cells[cfg.u] ? cells[cfg.u].v : null,
-          stock: cfg.s !== null && cells[cfg.s] ? Number(cells[cfg.s].v) : null,
+          stock: cfg.s !== null && cells[cfg.s] && cells[cfg.s].v != null && cells[cfg.s].v !== '' && isFinite(Number(cells[cfg.s].v)) ? Number(cells[cfg.s].v) : null,
           sheet: cfg.name
         };
       }).filter(isProductRecord);
@@ -670,6 +664,7 @@ function applyProductSnapshot(snapshot, cached) {
   populateCategories();
   populateBrands();
   renderCriticalStocks();
+  renderBasketPriceWarning();
   renderQuickLists();
   updateOverviewStats();
   setLastSync(snapshot.syncedAt, cached);
@@ -842,18 +837,19 @@ function getPriceChangeText(product) {
 function renderCriticalStocks() {
   var list = document.getElementById('criticalStockList');
   var card = document.getElementById('stockAlertCard');
-  var critical = products.filter(function(product) {
-    return product.stock !== null && product.stock !== undefined && Number(product.stock) <= 5;
-  }).sort(function(a, b){ return Number(a.stock) - Number(b.stock); });
+  var stocked = products.filter(function(product) {
+    return product.stock != null && product.stock !== '' && isFinite(Number(product.stock));
+  });
+  var critical = stocked.filter(function(product) { return Number(product.stock) <= 5; }).sort(function(a, b){ return Number(a.stock) - Number(b.stock); });
   if (card) card.hidden = critical.length === 0;
-  document.getElementById('criticalStockCount').textContent = critical.length ? critical.length + ' kritik ürün' : 'Kritik stok yok';
+  document.getElementById('criticalStockCount').textContent = critical.length ? critical.length + ' kritik ürün' : (stocked.length ? 'Kritik stok yok' : 'Stok bilgisi yok');
   var statEl = document.getElementById('statCriticalCount');
-  if (statEl) statEl.textContent = critical.length ? critical.length + ' ürün' : 'Yok';
+  if (statEl) statEl.textContent = critical.length ? critical.length + ' ürün' : (stocked.length ? 'Yok' : 'Stok bilgisi yok');
   while (list.firstChild) list.removeChild(list.firstChild);
   if (!critical.length) {
     var empty = document.createElement('span');
     empty.className = 'quick-empty';
-    empty.textContent = 'Kritik seviyede ürün bulunmuyor.';
+    empty.textContent = stocked.length ? 'Kritik seviyede ürün bulunmuyor.' : 'Stok bilgisi yok.';
     list.appendChild(empty);
     return;
   }
@@ -1281,7 +1277,45 @@ function clearBasket() {
   }
 }
 
+function getBasketPriceChanges() {
+  var latest = new Map(products.map(function(product) { return [productKey(product), product]; }));
+  return basket.map(function(item, index) {
+    var product = latest.get(productKey(item));
+    var valid = product && product.price != null && product.price !== '' && isFinite(Number(product.price)) && Number(product.price) >= 0;
+    if (!valid) return { index: index, unavailable: true };
+    if (item.price == null || item.price === '' || !isFinite(Number(item.price)) || money(item.price) !== money(product.price)) {
+      return { index: index, price: Number(product.price) };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+function renderBasketPriceWarning() {
+  var warning = document.getElementById('basketPriceWarning');
+  if (!warning) return;
+  var changes = products.length ? getBasketPriceChanges() : [];
+  var changed = changes.filter(function(change) { return !change.unavailable; }).length;
+  var missing = changes.length - changed;
+  warning.hidden = !changes.length;
+  document.getElementById('updateBasketPricesBtn').hidden = !changed;
+  document.getElementById('basketPriceWarningText').textContent =
+    (changed ? changed + ' ürünün fiyatı son yüklenen listeye göre değişti. Sepet mevcut fiyatlarını koruyor. ' : '') +
+    (missing ? missing + ' ürünün güncel fiyatı bulunamadı; bu ürünler güncellenmeyecek.' : '');
+}
+
+function updateBasketPrices() {
+  var changed = getBasketPriceChanges().filter(function(change) { return !change.unavailable; });
+  if (!changed.length) return;
+  changed.forEach(function(change) { basket[change.index].price = change.price; });
+  currentOfferNumber = '';
+  writeStore('teknikelCurrentBasket', basket);
+  renderBasket();
+  updateBadge();
+  showToast(changed.length + ' ürünün sepet fiyatı güncellendi.');
+}
+
 function renderBasket() {
+  renderBasketPriceWarning();
   var el = document.getElementById('basketWrap');
   while (el.firstChild) el.removeChild(el.firstChild);
   if (!basket.length) {
@@ -1913,7 +1947,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.34').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.35').catch(function(){}); });
 }
 
 updateConnectionState();

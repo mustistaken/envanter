@@ -7,7 +7,7 @@
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://docs.google.com">
-<link rel="stylesheet" href="styles.css?v=14.34">
+<link rel="stylesheet" href="styles.css?v=14.35">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -222,6 +222,10 @@
           <span>%</span>
         </div>
       </section>
+      <div class="basket-price-warning" id="basketPriceWarning" role="status" aria-live="polite" hidden>
+        <p id="basketPriceWarningText"></p>
+        <button class="tool-btn primary" type="button" id="updateBasketPricesBtn" data-action="updateBasketPrices">Fiyatları güncelle</button>
+      </div>
       <div class="basket-wrap" id="basketWrap">
         <div class="empty-basket">Sepetiniz henüz boş<br><span style="font-size:11px">Sorgulama ekranından ürün ekleyebilirsiniz</span></div>
       </div>
@@ -345,7 +349,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=14.34"></script>
+<script src="app.js?v=14.35"></script>
 </body>
 </html>
 

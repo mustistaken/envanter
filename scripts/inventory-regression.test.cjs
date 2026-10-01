@@ -153,12 +153,13 @@ test('invalid or failed rate responses show placeholders and preserve the last s
   await context.loadExchangeRates();
   assert.equal(elements.get('eurTryRate').textContent, '—');
   assert.equal(elements.get('usdTryRate').textContent, '—');
-  context.fetch = async url => ({ ok: true, json: async () => ({
-    rate: url.includes('/EUR/') ? 55.63 : 49.00, date: '2026-09-30'
-  }) });
+  context.fetch = async url => {
+    assert.match(url, /sheet=Kurlar/);
+    return gviz([['EUR', 55.63], ['USD', 49]]);
+  };
   await context.loadExchangeRates();
   assert.equal(elements.get('eurTryRate').textContent, '55,63 ₺');
-  context.fetch = async () => ({ ok: true, json: async () => ({ rate: null, date: '2026-09-30' }) });
+  context.fetch = async () => gviz([['EUR', null], ['USD', 49]]);
   await context.loadExchangeRates();
   assert.equal(elements.get('eurTryRate').textContent, '55,63 ₺');
   assert.match(elements.get('exchangeRateDate').textContent, /^Son kayıt/);
@@ -184,4 +185,57 @@ test('a partial background refresh preserves newer in-memory data and the full c
   await context.loadData(false);
   assert.equal(vm.runInContext('products[0].price', context), 100);
   assert.equal(storage.get('teknikelProductSnapshot'), cacheText);
+});
+
+
+test('old external-provider rate cache is never used as a Sheet rate', async () => {
+  const { context, storage, elements } = harness();
+  storage.set('teknikelExchangeRates', JSON.stringify({eurTry: 60, usdTry: 50, date: '2026-10-01'}));
+  context.fetch = async () => { throw new Error('offline'); };
+  await context.loadExchangeRates();
+  assert.equal(elements.get('eurTryRate').textContent, '—');
+});
+
+test('absent or invalid stock is unknown; actual zero remains a critical stock', async () => {
+  const { context, elements } = harness();
+  context.fetch = async () => gviz([
+    ['A', 'Boş stok', 100, null], ['B', 'Hatalı stok', 100, 'hata'], ['C', 'Sıfır stok', 100, 0]
+  ]);
+  const result = await context.fetchSheet({ name: 'Envanter', b:0, n:1, p:2, s:3, u:null });
+  assert.deepEqual(Array.from(result, p => p.stock), [null, null, 0]);
+  vm.runInContext('products = ' + JSON.stringify(result.slice(0,2)), context);
+  context.renderCriticalStocks();
+  assert.equal(elements.get('statCriticalCount').textContent, 'Stok bilgisi yok');
+  vm.runInContext('products = ' + JSON.stringify([product({stock: 20})]), context);
+  context.renderCriticalStocks();
+  assert.equal(elements.get('statCriticalCount').textContent, 'Yok');
+});
+
+test('basket prices remain fixed until explicit update and missing products are preserved', () => {
+  const { context, storage, elements } = harness();
+  const items = [product({price: 90, qty: 3}), product({barcode: 'MISSING', price: 40, qty: 2})];
+  vm.runInContext('basket = ' + JSON.stringify(items) + '; products = ' + JSON.stringify([product({price:100})]) + '; iskontoOrani = 15;', context);
+  context.renderBasketPriceWarning();
+  assert.equal(vm.runInContext('basket[0].price', context), 90);
+  assert.equal(elements.get('basketPriceWarning').hidden, false);
+  assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün fiyatı/);
+  assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün güncel fiyatı bulunamadı/);
+  context.renderBasket = () => context.renderBasketPriceWarning();
+  context.updateBadge = () => {};
+  context.showToast = () => {};
+  context.updateBasketPrices();
+  assert.equal(vm.runInContext('basket[0].price', context), 100);
+  assert.equal(vm.runInContext('basket[0].qty', context), 3);
+  assert.equal(vm.runInContext('basket[1].price', context), 40);
+  assert.equal(vm.runInContext('iskontoOrani', context), 15);
+  assert.equal(JSON.parse(storage.get('teknikelCurrentBasket'))[0].price,100);
+  assert.equal(elements.get('updateBasketPricesBtn').hidden, true);
+});
+
+test('basket comparison uses billed cents and supports zero-price changes', () => {
+  const { context } = harness();
+  vm.runInContext('basket = ' + JSON.stringify([product({price: 100.001})]) + '; products = ' + JSON.stringify([product({price:100.004})]), context);
+  assert.equal(context.getBasketPriceChanges().length, 0);
+  vm.runInContext('products[0].price = 0', context);
+  assert.equal(context.getBasketPriceChanges()[0].price, 0);
 });

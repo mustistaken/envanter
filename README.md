@@ -1,5 +1,12 @@
 # Teknikel
 
+## 14.35
+
+- Kur göstergesi, ürün fiyatlarını hesaplayan Google Sheets kurlarını `Kurlar!A1:B3` üzerinden okur. Eski Frankfurter önbelleği kullanılmaz; bağlantı koparsa son Sheet kaydı açıkça belirtilir.
+- Sepette değişen fiyatlar uyarılır ve yalnızca “Fiyatları güncelle” seçildiğinde güncellenir. Adet, iskonto ve geçmiş teklifler korunur; bulunamayan fiyatlar üzerine yazılmaz.
+- Stok verisi olmadığında “Stok bilgisi yok” gösterilir; boş ve geçersiz stok değerleri sıfır sayılmaz.
+- Ana Sheet yeniden hesaplama ayarı dakikalık yapıldı. Bu ayar GoogleFinance/IMPORTRANGE servis gecikmesini ortadan kaldırmaz ve Apps Script tetikleyicisi doğrulaması değildir.
+
 ## 14.34
 
 - Ürün verileri ve USD/EUR referans kurları, site görünür ve çevrimiçiyken 5 dakikada bir kontrol edilir. Uygulamaya geri dönüldüğünde süresi dolmuş veriler, internet geri geldiğinde ise veriler hemen yenilenir.
