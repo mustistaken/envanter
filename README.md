@@ -1,5 +1,15 @@
 # Teknikel
 
+## 14.38
+
+- Günlük Apps Script güncellemesi önce üretici kodunu, sonra yalnızca kategori, tam ürün adı, ölçü ve ambalajı tek bir güncel ürüne eşleşen kayıtları kullanır. Benzer model veya farklı ambalaj tahminle eşleştirilmez. Fiziksel barkodlar, favoriler ve sepet kimlikleri korunur.
+- Özel ana Sheet'teki “Ürün Eşleştirme” sekmesi tüm katalog satırlarının sonucunu ve kaynağını kaydeder. Üretici ve fiziksel kod sütunları metin biçimindedir; `7042E00001` gibi kodlar bilimsel gösterim olarak sayıya dönüşmez.
+- Site, yayın Sheet'inin F:I sütunlarından eşleştirme durumunu, üretici kodunu, fiyat birimini ve son kontrol zamanını okur. Hem eski barkod hem üretici kodu aranabilir. Üreticinin belirttiği kg/adet birimi ürün, sepet, teklif ve CSV'de gösterilir; bilinmeyen birim varsayılmaz.
+- Kaynakta tam karşılığı bulunmayan veya üretici fiyatı sıfır olan ürünlerin eski fiyatı korunur ve yeni teklif için teyit istenir. Eski sepet fiyatları otomatik değiştirilmez; “Fiyatları güncelle” fiyat ve birim bilgisini birlikte yeniler.
+- 01.10.2026 kontrolünde 2.018 Magmaweld kaydının 1.952'si eşleşti: 28 yeni kod eşleştirmesi ve 16 fiyat güncellemesi uygulandı. 66 kayıt tam eşleşme, 6 kayıt sıfır üretici fiyatı nedeniyle inceleme bekliyor. İkinci manuel çalışma fiyatları yeniden değiştirmeden tamamlandı.
+- Trafimet'in Nisan 2026 torç kataloğunda 920 benzersiz kod doğrulandı. Katalog fiyat içermediğinden Trafimet kaynak fiyatları Sheet'ten korunur; USD/EUR–TL formülleri kontrol edilir. “Sheet fiyatı” güncel üretici fiyatı doğrulaması değildir. Katalog kontrol tarihi sabittir; günlük saat Sheet/formül kontrolünü belirtir.
+- Sonraki zamanlanmış Apps Script çalışması ayrıca doğrulanmalıdır. Kontroller: `node --test scripts/*.test.cjs` ve yayın öncesi güvenlik taraması.
+
 ## 14.37
 
 - Ürün yenileme ve kur kontrol zamanları Türkiye saatinde (Europe/Istanbul) tutarlı gösterilir; kontrol saati kurun gerçek değişme saati olarak sunulmaz.

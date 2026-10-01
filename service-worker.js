@@ -1,6 +1,6 @@
-const CACHE_NAME = 'teknikel-v14-37';
+const CACHE_NAME = 'teknikel-v14-38';
 const APP_SHELL = [
-  './', './index.html', './styles.css?v=14.37', './app.js?v=14.37',
+  './', './index.html', './styles.css?v=14.38', './app.js?v=14.38',
   './manifest.json', './magmaweld-logo.png', './icon.png'
 ];
 const NAVIGATION_TIMEOUT_MS = 8000;

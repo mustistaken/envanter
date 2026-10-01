@@ -94,12 +94,14 @@ test('cached headers are removed and a cache containing only headings is not use
   assert.equal(context.readProductSnapshot(), null);
 });
 
-test('older cache records require a live currency check; verified cache remains usable offline', () => {
+test('older cache records require currency and catalogue checks; verified cache remains usable offline', () => {
   const {context,storage}=harness();
   function save(item) { storage.set('teknikelProductSnapshot',JSON.stringify({products:[item],syncedAt:'2026-10-01T15:00:00Z'})); }
   save(product());
   assert.equal(context.hasUsablePrice(context.readProductSnapshot().products[0]),false);
   save(product({priceIssue:''}));
+  assert.equal(context.hasUsablePrice(context.readProductSnapshot().products[0]),false);
+  save(product({priceIssue:'',matchStatus:'Sheet fiyatı'}));
   assert.equal(context.hasUsablePrice(context.readProductSnapshot().products[0]),true);
 });
 
@@ -240,7 +242,7 @@ test('basket prices remain fixed until explicit update and missing products are 
   context.renderBasketPriceWarning();
   assert.equal(vm.runInContext('basket[0].price', context), 90);
   assert.equal(elements.get('basketPriceWarning').hidden, false);
-  assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün fiyatı/);
+  assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün fiyatı veya birimi/);
   assert.match(elements.get('basketPriceWarningText').textContent, /1 ürünün güncel fiyatı doğrulanamadı/);
   context.renderBasket = () => context.renderBasketPriceWarning();
   context.updateBadge = () => {};
@@ -372,4 +374,95 @@ test('empty catalogues are failed reads, while an empty stock inventory is valid
   context.fetch=async()=>gviz([]);
   assert.equal(await context.fetchSheet({name:'Trafimet',b:0,n:1,p:3,s:null,u:null}),null);
   assert.equal((await context.fetchSheet({name:'Envanter',b:0,n:1,p:2,s:3,u:4})).length,0);
+});
+
+test('public matching columns preserve alphanumeric codes, pack specifications and price units', async () => {
+  const {context}=harness();
+  context.fetch=async url=> {
+    assert.match(url,/range=A:I/);
+    return gviz([['31001DCBM2','FCW 11 (D200 RND) (VAC)','1,00 mm - 5 Kg',3.6,176.52204,'Kod eşleştirildi','31001DFBM2','KG','2026-10-01T17:13:38.568Z']]);
+  };
+  const [item]=await context.fetchSheet({name:'Özlü Teller',b:0,n:1,p:4,u:null,s:null,m:5});
+  assert.equal(item.barcode,'31001DCBM2');
+  assert.equal(item.sourceCode,'31001DFBM2');
+  assert.equal(item.specification,'1,00 mm - 5 Kg');
+  assert.equal(context.hasUsablePrice(item),true);
+  assert.equal(context.productPriceLabel(item),'176,52 ₺ / kg');
+  const check=context.catalogueCheck([null,null,null,null,null,{v:'Kod eşleştirildi'},{v:'7042E00001'},{v:'AD'},{v:'2026-10-01T17:13:38Z'}],{name:'MW Torç ve Sarfları',m:5});
+  assert.equal(check.sourceCode,'7042E00001');
+});
+
+test('missing, zero, ambiguous, formula and absent matching metadata require price review',()=>{
+  const {context}=harness();
+  function check(status,time='2026-10-01T17:13:38Z') {
+    return context.catalogueCheck([null,null,null,null,null,{v:status},{v:'CODE'},{v:'AD'},{v:time}],{name:'MW Torç ve Sarfları',m:5});
+  }
+  for (const status of ['Kaynakta yok','Üretici fiyatı yok','Çoklu eşleşme','Fiyat formülü kontrolü','TL formülü kontrolü','Çelişkili kayıt','']) assert.ok(check(status).issue);
+  for (const status of ['Doğrulandı','Kod eşleştirildi','Sheet fiyatı']) assert.equal(check(status).issue,'');
+  assert.ok(check('Doğrulandı','').issue);
+  assert.match(check('Üretici fiyatı yok').issue,/fiyat sıfır/);
+});
+
+test('old and canonical barcode searches resolve the same original SKU and scanner prefers physical barcode',()=>{
+  const {context}=harness();
+  const alias=product({barcode:'70420',sourceCode:'7042E00001',matchStatus:'Kod eşleştirildi'});
+  const direct=product({barcode:'7042E00001',name:'Doğrudan barkod'});
+  vm.runInContext('products='+JSON.stringify([alias]),context);
+  let selected;
+  context.showResult=item=>{selected=item;};
+  for (const query of ['70420','7042E00001']) {
+    context.search(query,null,true);
+    assert.equal(selected.barcode,'70420');
+    assert.equal(context.productKey(selected),context.productKey(alias));
+  }
+  vm.runInContext('products='+JSON.stringify([alias,direct]),context);
+  context.search('7042E00001',null,true);
+  assert.equal(selected.name,'Doğrudan barkod');
+  context.search('7042E00002',null,true);
+  assert.equal(selected,null);
+});
+
+test('a current supplier price warning blocks quotes from an older basket without overwriting its price',()=>{
+  const {context}=harness();
+  const stored=product({qty:2,price:156.42});
+  vm.runInContext('basket='+JSON.stringify([stored])+'; products='+JSON.stringify([product({price:156.42,priceIssue:'Üretici fiyatı yok'})]),context);
+  context.showToast=()=>{};
+  assert.equal(context.getBasketTotals().complete,false);
+  assert.equal(context.buildOfferText(),'');
+  context.downloadCsv=()=>assert.fail('Unconfirmed quote must not be exported');
+  context.exportBasketCsv();
+  assert.equal(vm.runInContext('basket[0].price',context),156.42);
+});
+
+test('explicit basket update repairs old unit metadata without changing quantity or discount',()=>{
+  const {context,storage}=harness();
+  const live=product({price:176.52204,priceUnit:'KG',priceIssue:'',matchStatus:'Kod eşleştirildi',sourceCode:'NEW'});
+  vm.runInContext('basket='+JSON.stringify([product({price:176.52,qty:2})])+'; products='+JSON.stringify([live])+'; iskontoOrani=10;',context);
+  context.renderBasket=()=>{};context.updateBadge=()=>{};context.showToast=()=>{};
+  assert.equal(context.getBasketTotals().complete,false);
+  assert.equal(context.getBasketPriceChanges().length,1);
+  context.updateBasketPrices();
+  assert.equal(context.getBasketTotals().complete,true);
+  assert.equal(context.getBasketTotals().vatIncluded,381.29);
+  const [saved]=JSON.parse(storage.get('teknikelCurrentBasket'));
+  assert.equal(saved.qty,2);
+  assert.equal(saved.priceUnit,'KG');
+  assert.equal(saved.sourceCode,'NEW');
+  assert.equal(vm.runInContext('iskontoOrani',context),10);
+});
+
+test('offers and CSV use known price units and do not invent a unit for Sheet-only prices',()=>{
+  const {context}=harness();
+  context.showToast=()=>{};context.ensureOfferNumber=()=>{};
+  const items=[product({qty:2,price:176.52204,priceUnit:'KG'}),product({barcode:'OTHER',qty:1,priceUnit:''})];
+  vm.runInContext('basket='+JSON.stringify(items),context);
+  const offer=context.buildOfferText();
+  assert.match(offer,/2 kg × 176,52 ₺ \/ kg/);
+  assert.equal(context.productQuantityLabel(items[1]),'1');
+  let exported;
+  context.downloadCsv=(filename,rows)=>{exported=rows;};
+  context.exportBasketCsv();
+  assert.equal(exported[0][4],'Birim');
+  assert.equal(exported[1][4],'kg');
+  assert.equal(exported[2][4],'');
 });

@@ -7,7 +7,7 @@
 <meta name="description" content="Teknikel Kaynak Ekipmanları ürün, stok, fiyat ve teklif yönetimi.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://docs.google.com">
-<link rel="stylesheet" href="styles.css?v=14.37">
+<link rel="stylesheet" href="styles.css?v=14.38">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#1F4E79">
@@ -167,7 +167,7 @@
           </tr></tbody>
         </table>
         <div class="update-row">
-          <div class="update-label">SON GÜNCELLEME</div>
+          <div class="update-label">SON KONTROL</div>
           <div class="update-val" id="resDate">—</div>
         </div>
         <p class="product-data-warning" id="resDataWarning" role="status" hidden></p>
@@ -185,7 +185,7 @@
 
       <section class="card action-card">
         <div class="qty-row">
-          <label for="qtyInput">ADET</label>
+          <label for="qtyInput" id="qtyLabel">MİKTAR</label>
           <div class="qty-control">
             <button class="qty-btn" data-action="changeQty" data-args="[-1]" aria-label="Adedi azalt">−</button>
             <input type="number" id="qtyInput" value="1" min="1" max="9999" step="1" inputmode="numeric" enterkeyhint="done" />
@@ -322,7 +322,7 @@
     <div class="detail-grid">
       <div><span>ÜRÜN KODU</span><strong id="detailBarcode">—</strong></div>
       <div><span>STOK DURUMU</span><strong id="detailStock">—</strong></div>
-      <div><span>SON GÜNCELLEME</span><strong id="detailUpdated">—</strong></div>
+      <div><span>SON KONTROL</span><strong id="detailUpdated">—</strong></div>
       <div><span>VERİ KAYNAĞI</span><strong id="detailSource">—</strong></div>
       <div><span>FİYAT DEĞİŞİMİ</span><strong id="detailPriceChange">İlk kayıt</strong></div>
     </div>
@@ -351,7 +351,7 @@
   <button class="close-btn" id="closeBtn">Kapat</button>
 </div>
 
-<script src="app.js?v=14.37"></script>
+<script src="app.js?v=14.38"></script>
 </body>
 </html>
 
