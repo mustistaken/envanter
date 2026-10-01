@@ -1,5 +1,10 @@
 # Teknikel
 
+## 14.37
+
+- Ürün yenileme ve kur kontrol zamanları Türkiye saatinde (Europe/Istanbul) tutarlı gösterilir; kontrol saati kurun gerçek değişme saati olarak sunulmaz.
+- Önceki sürüm önbelleğinde kur kontrol bilgisi bulunmadığında ilk çevrimiçi yenileme istenir. Doğrulanmış yeni önbellek çevrimdışı kullanılabilir.
+
 ## 14.36
 
 - Fiyatı eksik, geçersiz veya para birimiyle TL hesabı uyumsuz ürünlerde sepete ekleme kapalıdır. Eski sepette eksik fiyat varsa toplam hesaplanmaz; teklif, PDF, paylaşım ve Excel aktarımı geçerli fiyat bekler. Gerçek sıfır fiyat korunur.

@@ -28,15 +28,15 @@ function harness() {
 
 test('cached versioned assets load without another network request', async () => {
   const h=harness();
-  h.records.set(h.scope+'app.js?v=14.36',new Response('current app'));
+  h.records.set(h.scope+'app.js?v=14.37',new Response('current app'));
   h.context.fetch=()=>assert.fail('Cached app should load locally');
-  const response=await h.request('app.js?v=14.36');
+  const response=await h.request('app.js?v=14.37');
   assert.equal(await response.text(),'current app');
 });
 
 test('offline requests cannot substitute a different JS release', async () => {
   const h=harness();
-  h.records.set(h.scope+'app.js?v=14.36',new Response('current app'));
+  h.records.set(h.scope+'app.js?v=14.37',new Response('current app'));
   h.context.fetch=async()=>{throw new Error('offline');};
   const response=await h.request('app.js?v=14.35');
   assert.equal(response.status,503);

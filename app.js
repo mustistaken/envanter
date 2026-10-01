@@ -24,6 +24,19 @@ const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EXCHANGE_RATE_CACHE_KEY = 'teknikelSheetExchangeRates';
 const productSearchTerms = new WeakMap();
 
+function formatCheckTime(value, timeOnly) {
+  var epoch = typeof value === 'number' ? value : Date.parse(value);
+  if (!Number.isFinite(epoch)) return '—';
+  var date = new Date(epoch);
+  var options = { timeZone: 'Europe/Istanbul' };
+  if (timeOnly) {
+    options.hour = '2-digit';
+    options.minute = '2-digit';
+    return date.toLocaleTimeString('tr-TR', options);
+  }
+  return date.toLocaleString('tr-TR', options);
+}
+
 function priceNumber(value) {
   if ((typeof value !== 'number' && typeof value !== 'string') ||
       (typeof value === 'string' && !value.trim())) return null;
@@ -291,7 +304,7 @@ function renderExchangeRates(record, cached) {
   document.getElementById('usdTryRate').textContent = formatExchangeRate(record && record.usdTry);
   var dateEl = document.getElementById('exchangeRateDate');
   dateEl.textContent = record ? (cached ? 'Son kayıt · ' : 'Sheet kontrolü · ') +
-    new Date(record.savedAt).toLocaleString('tr-TR') : 'Sheet kuru alınamadı';
+    formatCheckTime(record.savedAt) : 'Sheet kuru alınamadı';
 }
 
 async function loadExchangeRates() {
@@ -665,9 +678,8 @@ function setLastSync(value, cached) {
     if (statEl) statEl.textContent = 'Bağlantı yok';
     return;
   }
-  var syncDate = new Date(value);
-  el.textContent = (cached ? 'Önbellek: ' : 'Son yenileme: ') + syncDate.toLocaleString('tr-TR');
-  if (statEl) statEl.textContent = syncDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  el.textContent = (cached ? 'Önbellek: ' : 'Son yenileme: ') + formatCheckTime(value);
+  if (statEl) statEl.textContent = formatCheckTime(value, true);
 }
 
 function updateOverviewStats() {
@@ -756,7 +768,7 @@ async function loadData(manual) {
 
     var freshSnapshot = {
       products: freshProducts,
-      syncedAt: new Date().toISOString(),
+      syncedAt: new Date(Date.now()).toISOString(),
       failedCount: failedCount
     };
     if (!failedCount) writeProductSnapshot(freshSnapshot);
@@ -2043,7 +2055,7 @@ document.getElementById('installBtn').addEventListener('click', async function()
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.36').catch(function(){}); });
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('service-worker.js?v=14.37').catch(function(){}); });
 }
 
 updateConnectionState();

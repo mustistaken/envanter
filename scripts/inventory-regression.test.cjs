@@ -103,6 +103,17 @@ test('older cache records require a live currency check; verified cache remains 
   assert.equal(context.hasUsablePrice(context.readProductSnapshot().products[0]),true);
 });
 
+test('rate and product check times use the same Istanbul time for ISO and epoch timestamps', () => {
+  const {context,elements}=harness();
+  const iso='2026-10-01T15:21:25Z', epoch=Date.parse(iso);
+  assert.equal(context.formatCheckTime(iso),context.formatCheckTime(epoch));
+  assert.equal(context.formatCheckTime(epoch,true),'18:21');
+  context.setLastSync(iso,false);
+  context.renderExchangeRates({eurTry:55,usdTry:49,savedAt:epoch},false);
+  assert.equal(elements.get('statLastSync').textContent,'18:21');
+  assert.equal(elements.get('lastSyncText').textContent.replace('Son yenileme: ',''),elements.get('exchangeRateDate').textContent.replace('Sheet kontrolü · ',''));
+});
+
 test('a heading cannot be added to the basket even if it was previously selected', () => {
   const { context } = harness();
   vm.runInContext('currentProduct = ' + JSON.stringify(product({
