@@ -346,7 +346,7 @@ test('duplicate rows are collapsed while different SKUs and differing prices are
 
 test('search keeps the selected SKU after refresh and skips fuzzy scoring when direct matches exist', () => {
   const {context,elements} = harness();
-  const items=[product({barcode:'FIRST',name:'Lava torç'}), product({barcode:'SELECTED',name:'Lava torç'}), product({barcode:'OTHER',name:'Başka ürün'})];
+  const items=[product({barcode:'FIRST',name:'Lava torç',specification:'1,00 mm - 5 Kg',priceUnit:'KG'}), product({barcode:'SELECTED',name:'Lava torç',specification:'1,20 mm - 15 Kg',priceUnit:'KG'}), product({barcode:'OTHER',name:'Başka ürün'})];
   vm.runInContext('products = '+JSON.stringify(items),context);
   const original=context.scoreProductSearch;
   const fuzzyCalls=[];
@@ -357,6 +357,9 @@ test('search keeps the selected SKU after refresh and skips fuzzy scoring when d
   assert.equal(selected.barcode,'SELECTED');
   assert.deepEqual(fuzzyCalls,[false,false,false]);
   assert.ok(elements.get('suggestions').children.length>0);
+  const suggestions=elements.get('suggestions').children.filter(e=>e.className==='sug-item');
+  assert.deepEqual(suggestions.map(e=>e.children[0].children.find(c=>c.className==='sug-specification').textContent),['1,00 mm - 5 Kg','1,20 mm - 15 Kg']);
+  assert.ok(suggestions.every(e=>e.children[1].textContent==='100,00 ₺ / kg'));
   assert.ok(context.scoreProductSearch(product({name:'Lava torç'}),'lavaaa').score>0);
 });
 

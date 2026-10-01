@@ -1,5 +1,11 @@
 # Teknikel
 
+## 14.40
+
+- Ürün sonucunda uzun barkod, üretici kodu ve ölçü/ambalaj bilgisi kesilmeden satıra yayılır. Detay ve favori düğmeleri dar alanda küçülmez.
+- Arama listesi aynı adlı ürünleri ölçü/ambalaj bilgisiyle ayırır; bilinen kg/adet fiyat birimini de gösterir.
+- Mobil sepetin miktar başlığı kg ürünleriyle uyumlu olarak “Miktar” gösterilir. Ana tasarım korunur.
+
 ## 14.39
 
 - Kur çevirisindeki kuruştan küçük farklar “0,00 ₺ fiyat değişti” uyarısı oluşturmaz. Fiyat değişimleri teklif hesabıyla aynı kuruş hassasiyetinde karşılaştırılır.

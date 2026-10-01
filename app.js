@@ -1332,7 +1332,12 @@ function search(q, preferredKey, exactBarcodeOnly) {
     var barcodeSpan = document.createElement('span'); barcodeSpan.className = 'sug-barcode';
     barcodeSpan.textContent = p.sheet + (p.barcode ? ' · ' + p.barcode : '');
     nameSpan.appendChild(br); nameSpan.appendChild(barcodeSpan);
-    var priceSpan = document.createElement('span'); priceSpan.className = 'sug-price'; priceSpan.textContent = formatPrice(p.price);
+    if (p.specification) {
+      var specificationSpan = document.createElement('span'); specificationSpan.className = 'sug-specification';
+      specificationSpan.textContent = p.specification;
+      nameSpan.appendChild(specificationSpan);
+    }
+    var priceSpan = document.createElement('span'); priceSpan.className = 'sug-price'; priceSpan.textContent = productPriceLabel(p);
     btn.appendChild(nameSpan); btn.appendChild(priceSpan);
     sugEl.appendChild(btn);
   });
