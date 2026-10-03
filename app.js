@@ -63,13 +63,26 @@ function catalogueCheck(cells, cfg) {
   function value(index) { return cells[index] && cells[index].v != null ? String(cells[index].v).trim() : ''; }
   var status = value(cfg.m), checkedAt = value(cfg.m + 3);
   var allowed = ['Doğrulandı', 'Kod eşleştirildi', 'Sheet fiyatı'];
+  if (cfg.pdf) allowed.push('PDF fiyatı');
   var issue = '';
   if (!allowed.includes(status) || !Number.isFinite(Date.parse(checkedAt))) {
-    issue = status === 'Üretici fiyatı yok' ? 'Üretici listesinde fiyat sıfır. Teklif için güncel fiyatı teyit edin.' :
+    issue = status === 'PDF fiyatı sorunuz' ? 'PDF listesinde fiyat “Sorunuz” olarak belirtilmiş. Teklif için fiyatı teyit edin.' :
+      status === 'Üretici fiyatı yok' ? 'Üretici listesinde fiyat sıfır. Teklif için güncel fiyatı teyit edin.' :
       status === 'Kaynakta yok' ? 'Güncel üretici listesinde bu ürünün aynı kodu veya tam karşılığı yok. Fiyatı teyit edin.' :
       'Ürün eşleştirmesi veya fiyat hesabı doğrulanamadı. Sheet kontrol raporunu inceleyin.';
   }
   return { matchStatus: status, sourceCode: value(cfg.m + 1), priceUnit: value(cfg.m + 2), sourceCheckedAt: checkedAt || null, issue: issue };
+}
+
+function productDateLabel(product) {
+  if (product.pdfListDate) return 'PDF: ' + product.pdfListDate;
+  return product.sourceCheckedAt ? formatCheckTime(product.sourceCheckedAt) : formatDate(product.updated);
+}
+
+function productSourceNote(product) {
+  if (!product.pdfListDate) return '';
+  return 'PDF listesi: ' + product.pdfListDate + (product.pdfPage ? ' · Sayfa ' + product.pdfPage : '') +
+    (product.sourceNote ? ' · ' + product.sourceNote : '');
 }
 
 function productUnitLabel(product) {
@@ -397,6 +410,8 @@ function getBrand(product) {
   if (!product) return '';
   var text = normalizeText(product.name);
   if (product.sheet === 'Trafimet' || text.includes('trafimet')) return 'Trafimet';
+  if (product.sheet === 'Komark') return 'Komark';
+  if (product.sheet === 'Süper Kaynak') return 'Süper Kaynak';
   if (MAGMAWELD_SHEETS.has(product.sheet) || text.includes('magmaweld')) return 'Magmaweld';
   if (text.includes('inelco')) return 'Inelco';
   return '';
@@ -601,6 +616,8 @@ const SHEETS = [
   { name: 'Özlü Teller',                b:0, n:1, p:4,    u:null, s:null, m:5 },
   { name: 'MIG-MAG ve TIG Telleri',     b:0, n:1, p:4,    u:null, s:null, m:5 },
   { name: 'Örtülü Elektrodlar',         b:0, n:1, p:4,    u:null, s:null, m:5 },
+  { name: 'Komark',                    b:0, n:1, p:4,    u:null, s:null, m:5, pdf:true, pdfListDate:'11.08.2025' },
+  { name: 'Süper Kaynak',              b:0, n:1, p:4,    u:null, s:null, m:5, pdf:true, pdfListDate:'Haziran 2026' },
 ];
 
 const RETIRED_DEMO_BARCODES = new Set([
@@ -668,7 +685,7 @@ function isProductRecord(product) {
 
 async function fetchSheet(cfg) {
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-    '/gviz/tq?tqx=out:json&headers=2&range=' + (cfg.m != null ? 'A:I' : cfg.name === 'Trafimet' ? 'A:D' : 'A:E') + '&sheet=' + encodeURIComponent(cfg.name);
+    '/gviz/tq?tqx=out:json&headers=2&range=' + (cfg.pdf ? 'A:L' : cfg.m != null ? 'A:I' : cfg.name === 'Trafimet' ? 'A:D' : 'A:E') + '&sheet=' + encodeURIComponent(cfg.name);
   try {
     const text = await fetchWithTimeout(url, { cache: 'no-store' });
     const match = text.match(/setResponse\(([\s\S]*?)\);/);
@@ -692,6 +709,9 @@ async function fetchSheet(cfg) {
           sourceCode: check.sourceCode,
           priceUnit: check.priceUnit,
           sourceCheckedAt: check.sourceCheckedAt,
+          pdfListDate: cfg.pdf ? cfg.pdfListDate : '',
+          pdfPage: cfg.pdf && cells[10] ? cells[10].v : null,
+          sourceNote: cfg.pdf && cells[11] ? String(cells[11].v || '') : '',
           specification: cfg.name !== 'Envanter' && !cfg.name.startsWith('MW ') && cfg.name !== 'Trafimet' && cells[2] ? String(cells[2].v || '') : '',
           updated: cfg.u !== null && cells[cfg.u] ? cells[cfg.u].v : null,
           stock: cfg.s !== null && cells[cfg.s] && cells[cfg.s].v != null && cells[cfg.s].v !== '' && isFinite(Number(cells[cfg.s].v)) ? Number(cells[cfg.s].v) : null,
@@ -1035,8 +1055,8 @@ function showResult(found, quiet) {
     priceEl.textContent  = productPriceLabel(found);
     statusEl.textContent = stockInfo.text;
     statusEl.style.color = stockInfo.color;
-    dateEl.textContent   = found.sourceCheckedAt ? formatCheckTime(found.sourceCheckedAt) : formatDate(found.updated);
-    sourceEl.textContent = 'Kaynak: ' + found.sheet + (found.barcode ? ' · Barkod: ' + found.barcode : '') +
+    dateEl.textContent   = productDateLabel(found);
+    sourceEl.textContent = 'Kaynak: ' + found.sheet + (found.barcode ? (found.pdfListDate ? ' · Kayıt: ' : ' · Barkod: ') + found.barcode : '') +
       (found.sourceCode && found.sourceCode !== found.barcode ? ' · Üretici kodu: ' + found.sourceCode : '') +
       (found.specification ? ' · ' + found.specification : '');
     var unit = productUnitLabel(found);
@@ -1051,12 +1071,12 @@ function showResult(found, quiet) {
     );
     addBtn.disabled = !hasUsablePrice(found);
     var dataWarning = document.getElementById('resDataWarning');
-    dataWarning.hidden = hasUsablePrice(found);
-    dataWarning.textContent = found.priceIssue || 'Bu ürünün geçerli fiyatı bulunamadı. Sepete eklemeden önce fiyatı doğrulayın.';
+    dataWarning.hidden = hasUsablePrice(found) && !found.pdfListDate;
+    dataWarning.textContent = found.priceIssue || (found.pdfListDate ? productSourceNote(found) : 'Bu ürünün geçerli fiyatı bulunamadı. Sepete eklemeden önce fiyatı doğrulayın.');
     detailBtn.disabled   = false;
     currentProduct       = found;
     var changeText = getPriceChangeText(found);
-    priceBadge.textContent = !hasUsablePrice(found) ? 'FİYAT KONTROLÜ GEREKLİ' : (changeText === 'Değişiklik yok' ? (found.matchStatus === 'Doğrulandı' ? 'ÜRETİCİ KODU DOĞRULANDI' : found.matchStatus === 'Kod eşleştirildi' ? 'KOD EŞLEŞTİRİLDİ' : 'SHEET FİYATI') : changeText);
+    priceBadge.textContent = !hasUsablePrice(found) ? 'FİYAT KONTROLÜ GEREKLİ' : (found.pdfListDate ? 'PDF LİSTE FİYATI' : (changeText === 'Değişiklik yok' ? (found.matchStatus === 'Doğrulandı' ? 'ÜRETİCİ KODU DOĞRULANDI' : found.matchStatus === 'Kod eşleştirildi' ? 'KOD EŞLEŞTİRİLDİ' : 'SHEET FİYATI') : changeText));
     priceBadge.className = found.priceChange > 0 ? 'up' : (found.priceChange < 0 ? 'down' : '');
     var isFavorite = favorites.includes(productKey(found));
     favoriteBtn.classList.toggle('active', isFavorite);
@@ -1104,10 +1124,11 @@ function openProductDetail() {
   document.getElementById('detailBarcode').textContent = currentProduct.barcode || '—';
   document.getElementById('detailStock').textContent = stockInfo.text;
   document.getElementById('detailStock').style.color = stockInfo.color;
-  document.getElementById('detailUpdated').textContent = currentProduct.sourceCheckedAt ? formatCheckTime(currentProduct.sourceCheckedAt) : formatDate(currentProduct.updated);
+  document.getElementById('detailUpdated').textContent = productDateLabel(currentProduct);
   document.getElementById('detailSource').textContent = (currentProduct.sheet || '—') +
     (currentProduct.sourceCode && currentProduct.sourceCode !== currentProduct.barcode ? ' · Üretici kodu: ' + currentProduct.sourceCode : '') +
-    (currentProduct.specification ? ' · ' + currentProduct.specification : '');
+    (currentProduct.specification ? ' · ' + currentProduct.specification : '') +
+    (currentProduct.pdfListDate ? ' · ' + productSourceNote(currentProduct) : '');
   document.getElementById('detailPriceChange').textContent = getPriceChangeText(currentProduct);
   document.getElementById('favoriteGroupInput').value = favoriteGroups[productKey(currentProduct)] || '';
   openModal('productDetailModal');
@@ -1290,10 +1311,14 @@ function search(q, preferredKey, exactBarcodeOnly) {
     if (hasMax && price > maxPrice) return false;
     return true;
   });
-  var exact = q ? pool.find(function(p){ return p.barcode === q; }) || pool.find(function(p){ return p.sourceCode === q; }) : null;
+  var physicalMatches = q ? pool.filter(function(p){ return p.barcode === q; }) : [];
+  var compactQuery = normalizeText(q).replace(/\s+/g, '');
+  var exactMatches = physicalMatches.length ? physicalMatches : q ? pool.filter(function(p){ return p.sourceCode && normalizeText(p.sourceCode).replace(/\s+/g, '') === compactQuery; }) : [];
+  var ambiguousExact = exactMatches.length > 1;
+  var exact = exactMatches.length === 1 ? exactMatches[0] : null;
   if (exact) { showResult(exact); addRecentProduct(exact); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
-  if (exactBarcodeOnly) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
+  if (exactBarcodeOnly && !ambiguousExact) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
   var preparedQuery = prepareSearchQuery(q);
   function scorePool(allowFuzzy) {
     return pool.map(function(product) {
@@ -1301,7 +1326,7 @@ function search(q, preferredKey, exactBarcodeOnly) {
       return { product: product, score: result.score, fuzzy: result.fuzzy };
     }).filter(function(item) { return item.score > 0; });
   }
-  var scoredMatches = scorePool(false);
+  var scoredMatches = ambiguousExact ? exactMatches.map(function(p) { return {product:p, score:1, fuzzy:false}; }) : scorePool(false);
   if (!scoredMatches.length) scoredMatches = scorePool(true);
   scoredMatches.sort(function(a, b) {
     if (b.score !== a.score) return b.score - a.score;
@@ -1315,7 +1340,11 @@ function search(q, preferredKey, exactBarcodeOnly) {
   if (matches.length === 0) { showResult(null); while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
   var selected = preferredKey && matches.find(function(product) { return productKey(product) === preferredKey; });
-  showResult(selected || matches[0], true);
+  showResult(selected || (ambiguousExact ? null : matches[0]), true);
+  if (ambiguousExact && !selected) {
+    document.getElementById('resName').textContent = 'Bu kod birden fazla varyanta ait';
+    document.getElementById('resStatus').textContent = 'Listeden varyant seçin';
+  }
   if (matches.length === 1) { while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild); return; }
 
   while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild);
@@ -1446,7 +1475,7 @@ function updateBasketPrices() {
   changed.forEach(function(change) {
     var item = basket[change.index], product = latest.get(productKey(item));
     item.price = change.price;
-    ['priceIssue', 'matchStatus', 'sourceCode', 'priceUnit', 'sourceCheckedAt', 'specification'].forEach(function(field) {
+    ['priceIssue', 'matchStatus', 'sourceCode', 'priceUnit', 'sourceCheckedAt', 'specification', 'pdfListDate', 'pdfPage', 'sourceNote'].forEach(function(field) {
       item[field] = product[field];
     });
   });

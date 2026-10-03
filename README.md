@@ -1,5 +1,12 @@
 # Teknikel
 
+## 14.41
+
+- Komark (11.08.2025) için 342, Süper Kaynak (Haziran 2026) için 597 PDF ürün/varyant kaydı ana envantere iki ayrı sekmede eklendi. Yayın Sheet’i bu sekmeleri IMPORTRANGE ile okur; site kategori ve marka filtrelerine dahil eder.
+- PDF fiyatları ve kaynak sayfası korunur. TL fiyatları mevcut otomatik EUR/USD kurlarına bağlıdır; PDF kaynak tarihleri günlük fiyat güncellemesi olarak gösterilmez. Süper Kaynak tarihinin hassasiyeti ay düzeyindedir.
+- Aynı kodlu farklı ürünler, malzeme seçenekleri ve standart/EKO torçlar farklı kayıt kimlikleriyle korunur; üretici kodları değişmez. Kodsuz satırlarda PDF- kimliği yalnızca yerel kaydı belirtir. Birden fazla varyanta ait üretici kodu arama/taramada otomatik ürün seçmez.
+- Komark’ın “Sorunuz” yazan 8 kaydı fiyat teyidine kadar teklif için kapalıdır. Kaynakta belirtilmeyen fiyat birimi varsayılmaz; açık kg/adet bilgisi korunur. Kimyasal listesinde makine/fırça satırları adet, sıvılar kg olarak değerlendirilir.
+
 ## 14.40
 
 - Ürün sonucunda uzun barkod, üretici kodu ve ölçü/ambalaj bilgisi kesilmeden satıra yayılır. Detay ve favori düğmeleri dar alanda küçülmez.

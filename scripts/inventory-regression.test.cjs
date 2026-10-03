@@ -425,6 +425,51 @@ test('old and canonical barcode searches resolve the same original SKU and scann
   assert.equal(selected,null);
 });
 
+test('PDF catalogues preserve source dates, variant identity, units and missing-price blocking',async()=>{
+  const {context}=harness();
+  const cfg={name:'Komark',b:0,n:1,p:4,s:null,u:null,m:5,pdf:true,pdfListDate:'11.08.2025'};
+  let url;
+  context.fetch=async request=>{
+    url=request;
+    return gviz([
+      ['CODE · STANDARD','WP 9 TIG TORÇ','Standart · 4 m',101,5575.39,'PDF fiyatı','CODE','AD','2025-08-11T00:00:00+03:00','EUR',16,'PDF fiyatı'],
+      ['CODE · ECO','WP 9 TIG TORÇ','EKO · 4 m',55,3036.10,'PDF fiyatı','CODE','AD','2025-08-11T00:00:00+03:00','EUR',16,'PDF fiyatı'],
+      ['WAIT','MIG KONTAK MEME','L 28',null,null,'PDF fiyatı sorunuz','WAIT','AD','2025-08-11T00:00:00+03:00','EUR',13,'Sorunuz']
+    ]);
+  };
+  const items=await context.fetchSheet(cfg);
+  assert.ok(url.includes('range=A:L'));
+  assert.equal(items.length,3);
+  assert.equal(context.hasUsablePrice(items[0]),true);
+  assert.equal(context.hasUsablePrice(items[1]),true);
+  assert.equal(context.hasUsablePrice(items[2]),false);
+  assert.match(items[2].priceIssue,/Sorunuz/);
+  assert.equal(context.productDateLabel(items[0]),'PDF: 11.08.2025');
+  assert.match(context.productSourceNote(items[0]),/Sayfa 16/);
+  assert.equal(context.productPriceLabel(items[1]),'3.036,10 ₺ / adet');
+  assert.notEqual(context.productKey(items[0]),context.productKey(items[1]));
+  assert.equal(context.getBrand(items[0]),'Komark');
+  assert.equal(context.getBrand(product({sheet:'Süper Kaynak'})),'Süper Kaynak');
+  assert.ok(context.catalogueCheck([null,null,null,null,null,{v:'PDF fiyatı'},null,null,{v:'2025-08-11T00:00:00+03:00'}],{name:'Trafimet',m:5}).issue);
+});
+
+test('ambiguous supplier codes require a variant selection in typed search and scanning',()=>{
+  const {context,elements}=harness();
+  const variants=[product({barcode:'SKE 001 TK · MIG',sourceCode:'SKE 001 TK',name:'MIG akım kablosu'}),product({barcode:'SKE 001 TK · TIG',sourceCode:'SKE 001 TK',name:'TIG akım kablosu'})];
+  vm.runInContext('products='+JSON.stringify(variants),context);
+  let selected;
+  context.showResult=p=>{selected=p;};
+  for(const scanned of [false,true]){
+    context.search('SKE001TK',null,scanned);
+    assert.equal(selected,null);
+    assert.equal(elements.get('suggestions').children.filter(x=>x.className==='sug-item').length,2);
+  }
+  context.search('SKE001TK',context.productKey(variants[1]),false);
+  assert.equal(selected.name,'TIG akım kablosu');
+  context.search('SKE 001 TK · MIG',null,true);
+  assert.equal(selected.name,'MIG akım kablosu');
+});
+
 test('a current supplier price warning blocks quotes from an older basket without overwriting its price',()=>{
   const {context}=harness();
   const stored=product({qty:2,price:156.42});
