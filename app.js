@@ -80,7 +80,7 @@ function productDateLabel(product) {
 }
 
 function productSourceNote(product) {
-  if (!product.pdfListDate) return '';
+  if (!product.pdfListDate) return product.sourceNote || '';
   return 'PDF listesi: ' + product.pdfListDate + (product.pdfPage ? ' · Sayfa ' + product.pdfPage : '') +
     (product.sourceNote ? ' · ' + product.sourceNote : '');
 }
@@ -375,13 +375,24 @@ async function loadExchangeRates() {
 }
 
 function productKey(product) {
-  return product ? JSON.stringify([product.sheet || '', String(product.barcode || '').trim() || product.name || '']) : '';
+  if (!product) return '';
+  var barcode = String(product.barcode || '').trim();
+  // Two verified records represented this exact same package; retain the original physical code.
+  if (product.sheet === 'MIG-MAG ve TIG Telleri' && barcode === '21002BJAM2') barcode = '21002BJBM1';
+  return JSON.stringify([product.sheet || '', barcode || product.name || '']);
 }
 
 function migrateProductReferences() {
   function migrate(keys) {
     return Array.from(new Set(keys.flatMap(function(key) {
-      if (key.startsWith('[')) return [key];
+      if (key.startsWith('[')) {
+        try {
+          var parts = JSON.parse(key);
+          var next = productKey({ sheet: parts[0], barcode: parts[1] });
+          if (favoriteGroups[key]) favoriteGroups[next] = favoriteGroups[key];
+          return [next];
+        } catch (e) { return [key]; }
+      }
       var matches = products.filter(function(product) { return product.name + '|' + product.sheet === key; });
       if (!matches.length) return [key];
       return matches.map(function(product) {
@@ -401,6 +412,8 @@ function migrateProductReferences() {
 const MAGMAWELD_SHEETS = new Set([
   'MW Torç ve Sarfları',
   'MW Kaynak Makinaları',
+  'Kaynak Tamamlayıcı Ürünler',
+  'Tozaltı Telleri ve Tozları',
   'Özlü Teller',
   'MIG-MAG ve TIG Telleri',
   'Örtülü Elektrodlar'
@@ -614,6 +627,7 @@ const SHEETS = [
   { name: 'Trafimet',                    b:0, n:1, p:3,    u:null, s:null, m:5 },
   { name: 'Kaynak Tamamlayıcı Ürünler', b:0, n:1, p:4,    u:null, s:null, m:5 },
   { name: 'Özlü Teller',                b:0, n:1, p:4,    u:null, s:null, m:5 },
+  { name: 'Tozaltı Telleri ve Tozları', b:0, n:1, p:4, u:null, s:null, m:5, manualCheckNote:'Üretici fiyatları 07.10.2026 tarihinde karşılaştırıldı. Bu kategorinin günlük otomatik güncellemesi henüz devreye alınmadı.' },
   { name: 'MIG-MAG ve TIG Telleri',     b:0, n:1, p:4,    u:null, s:null, m:5 },
   { name: 'Örtülü Elektrodlar',         b:0, n:1, p:4,    u:null, s:null, m:5 },
   { name: 'Komark',                    b:0, n:1, p:4,    u:null, s:null, m:5, pdf:true, pdfListDate:'11.08.2025' },
@@ -711,7 +725,7 @@ async function fetchSheet(cfg) {
           sourceCheckedAt: check.sourceCheckedAt,
           pdfListDate: cfg.pdf ? cfg.pdfListDate : '',
           pdfPage: cfg.pdf && cells[10] ? cells[10].v : null,
-          sourceNote: cfg.pdf && cells[11] ? String(cells[11].v || '') : '',
+          sourceNote: cfg.pdf && cells[11] ? String(cells[11].v || '') : (cfg.manualCheckNote || ''),
           specification: cfg.name !== 'Envanter' && !cfg.name.startsWith('MW ') && cfg.name !== 'Trafimet' && cells[2] ? String(cells[2].v || '') : '',
           updated: cfg.u !== null && cells[cfg.u] ? cells[cfg.u].v : null,
           stock: cfg.s !== null && cells[cfg.s] && cells[cfg.s].v != null && cells[cfg.s].v !== '' && isFinite(Number(cells[cfg.s].v)) ? Number(cells[cfg.s].v) : null,

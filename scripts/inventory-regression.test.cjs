@@ -538,3 +538,31 @@ test('exchange-rate fractions do not create a zero-cent price-change alert',()=>
   assert.equal(vm.runInContext('products[0].priceChange',context),0.02);
   assert.match(context.getPriceChangeText(vm.runInContext('products[0]',context)),/Yükseldi · 0,02 ₺/);
 });
+
+test('consolidated exact package preserves both code searches, favorites and old basket references',()=>{
+  const {context,storage}=harness();
+  const live=product({sheet:'MIG-MAG ve TIG Telleri',barcode:'21002BJBM1',sourceCode:'21002BJAM2',name:'MG 2 (K300 MS PRE)',specification:'0.80 (mm) - 15 (Kg) (NET)',price:100,priceUnit:'KG',priceIssue:'',matchStatus:'Kod eşleştirildi'});
+  const previous={...live,barcode:'21002BJAM2',price:90,qty:2};
+  assert.equal(context.productKey(live),context.productKey(previous));
+  assert.notEqual(context.productKey(live),context.productKey({...live,sheet:'Özlü Teller'}));
+  vm.runInContext('products='+JSON.stringify([live])+';basket='+JSON.stringify([previous])+';favorites='+JSON.stringify([JSON.stringify([live.sheet,'21002BJAM2'])])+';recentProducts=[];favoriteGroups={};',context);
+  context.migrateProductReferences();
+  assert.deepEqual(JSON.parse(storage.get('teknikelFavorites')),[context.productKey(live)]);
+  let selected;context.showResult=x=>{selected=x;};context.addRecentProduct=()=>{};
+  for(const query of ['21002BJBM1','21002BJAM2']){context.search(query,null,true);assert.equal(selected.barcode,live.barcode);}
+  assert.equal(context.getBasketPriceChanges()[0].unavailable,undefined);
+  assert.equal(context.getBasketPriceChanges()[0].price,100);
+  assert.equal(vm.runInContext('basket[0].price',context),90);
+});
+
+test('new submerged-arc category preserves manufacturer units and discloses manual source check',async()=>{
+  const {context}=harness();
+  const cfg=vm.runInContext("SHEETS.find(x=>x.name==='Tozaltı Telleri ve Tozları')",context);
+  context.fetchWithTimeout=async()=> 'google.visualization.Query.setResponse('+JSON.stringify({status:'ok',table:{rows:[{c:[{v:'401000AGM2'},{v:'SF 104 (KRAFT)'},{v:'25 (Kg) (NET)'},{v:2.32,f:'$2,3200'},{v:114.14,f:'114,14 ₺'},{v:'Doğrulandı'},{v:'401000AGM2'},{v:'KG'},{v:'2026-10-07T06:54:18.128Z'}]}]}})+');';
+  const [item]=await context.fetchSheet(cfg);
+  assert.equal(item.priceUnit,'KG');assert.equal(item.price,114.14);
+  assert.equal(context.getBrand(item),'Magmaweld');
+  assert.match(context.productSourceNote(item),/07\.10\.2026/);
+  assert.match(context.productSourceNote(item),/günlük otomatik güncellemesi henüz devreye alınmadı/);
+  assert.equal(context.hasUsablePrice(item),true);
+});
