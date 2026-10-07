@@ -1,6 +1,6 @@
 # Teknikel
 
-## 14.43
+## 14.44
 
 Magmaweld üretici listesiyle iki yönlü tam katalog kontrolü: 184 eksik kayıt eklendi, aynı ürüne bağlanan 1 tekrar tek kayda indirildi. Tozaltı kategorisi eklendi. Eski fiziksel kod ve güncel üretici koduyla arama/sepet referansları korunur. Tozaltı fiyatları 07.10.2026 tarihinde elle doğrulandı; günlük Apps Script yapılandırması için oturum erişimi gerekir.
 

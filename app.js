@@ -1085,8 +1085,8 @@ function showResult(found, quiet) {
     );
     addBtn.disabled = !hasUsablePrice(found);
     var dataWarning = document.getElementById('resDataWarning');
-    dataWarning.hidden = hasUsablePrice(found) && !found.pdfListDate;
-    dataWarning.textContent = found.priceIssue || (found.pdfListDate ? productSourceNote(found) : 'Bu ürünün geçerli fiyatı bulunamadı. Sepete eklemeden önce fiyatı doğrulayın.');
+    dataWarning.hidden = hasUsablePrice(found) && !productSourceNote(found);
+    dataWarning.textContent = found.priceIssue || productSourceNote(found) || 'Bu ürünün geçerli fiyatı bulunamadı. Sepete eklemeden önce fiyatı doğrulayın.';
     detailBtn.disabled   = false;
     currentProduct       = found;
     var changeText = getPriceChangeText(found);
@@ -1142,7 +1142,7 @@ function openProductDetail() {
   document.getElementById('detailSource').textContent = (currentProduct.sheet || '—') +
     (currentProduct.sourceCode && currentProduct.sourceCode !== currentProduct.barcode ? ' · Üretici kodu: ' + currentProduct.sourceCode : '') +
     (currentProduct.specification ? ' · ' + currentProduct.specification : '') +
-    (currentProduct.pdfListDate ? ' · ' + productSourceNote(currentProduct) : '');
+    (productSourceNote(currentProduct) ? ' · ' + productSourceNote(currentProduct) : '');
   document.getElementById('detailPriceChange').textContent = getPriceChangeText(currentProduct);
   document.getElementById('favoriteGroupInput').value = favoriteGroups[productKey(currentProduct)] || '';
   openModal('productDetailModal');

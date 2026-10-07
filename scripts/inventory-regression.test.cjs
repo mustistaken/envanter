@@ -565,4 +565,7 @@ test('new submerged-arc category preserves manufacturer units and discloses manu
   assert.match(context.productSourceNote(item),/07\.10\.2026/);
   assert.match(context.productSourceNote(item),/günlük otomatik güncellemesi henüz devreye alınmadı/);
   assert.equal(context.hasUsablePrice(item),true);
+  context.showResult(item,true);
+  assert.equal(context.document.getElementById('resDataWarning').hidden,false);
+  assert.match(context.document.getElementById('resDataWarning').textContent,/günlük otomatik güncellemesi henüz devreye alınmadı/);
 });
