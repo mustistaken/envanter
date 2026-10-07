@@ -1,5 +1,9 @@
 # Teknikel
 
+## 14.42
+
+- Removed full product codes no longer resolve to unrelated fuzzy matches. Catalogue deletions therefore leave a clear no-result state.
+
 ## 14.41
 
 - Komark (11.08.2025) için 342, Süper Kaynak (Haziran 2026) için 597 PDF ürün/varyant kaydı ana envantere iki ayrı sekmede eklendi. Yayın Sheet’i bu sekmeleri IMPORTRANGE ile okur; site kategori ve marka filtrelerine dahil eder.

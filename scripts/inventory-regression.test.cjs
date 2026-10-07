@@ -372,6 +372,16 @@ test('scanner lookup does not select a similar product for an unknown barcode', 
   assert.equal(selected,null);
 });
 
+test('a removed full product code never selects a fuzzy priced product', () => {
+  const {context,elements} = harness();
+  vm.runInContext('products = '+JSON.stringify([product({barcode:'31001EGAM3',name:'31001EGAM3',price:277})]),context);
+  let selected='not called';
+  context.showResult=p=> {selected=p;};
+  context.search('31001EGAM2');
+  assert.equal(selected,null);
+  assert.equal(elements.get('suggestions').children.length,0);
+});
+
 test('empty catalogues are failed reads, while an empty stock inventory is valid', async () => {
   const {context}=harness();
   context.fetch=async()=>gviz([]);

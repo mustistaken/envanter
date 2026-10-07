@@ -1327,6 +1327,12 @@ function search(q, preferredKey, exactBarcodeOnly) {
     }).filter(function(item) { return item.score > 0; });
   }
   var scoredMatches = ambiguousExact ? exactMatches.map(function(p) { return {product:p, score:1, fuzzy:false}; }) : scorePool(false);
+  // A complete catalogue code must never resolve to a visually similar, unrelated product.
+  if (!scoredMatches.length && /^[a-z0-9]{9,}$/i.test(q) && /\d/.test(q)) {
+    showResult(null);
+    while (sugEl.firstChild) sugEl.removeChild(sugEl.firstChild);
+    return;
+  }
   if (!scoredMatches.length) scoredMatches = scorePool(true);
   scoredMatches.sort(function(a, b) {
     if (b.score !== a.score) return b.score - a.score;
